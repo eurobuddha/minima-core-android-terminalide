@@ -63,22 +63,26 @@
         android:paddingStart="4dp"
         android:paddingEnd="4dp">
 
-        <Button
+        <TextView
             android:id="@+id/terminal_hist_up"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="36dp"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
+            android:layout_width="40dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
             android:text="▲"
+            android:textSize="18sp"
             android:textColor="@color/ide_accent" />
 
-        <Button
+        <TextView
             android:id="@+id/terminal_hist_down"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="36dp"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
+            android:layout_width="40dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
             android:text="▼"
+            android:textSize="18sp"
             android:textColor="@color/ide_accent" />
 
         <EditText
@@ -95,13 +99,15 @@
             android:hint="command…"
             android:inputType="text|textNoSuggestions" />
 
-        <Button
+        <TextView
             android:id="@+id/terminal_fav"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="36dp"
-            android:layout_height="wrap_content"
-            android:minWidth="0dp"
+            android:layout_width="40dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
             android:text="★"
+            android:textSize="18sp"
             android:textColor="@color/ide_warn" />
 
         <Button

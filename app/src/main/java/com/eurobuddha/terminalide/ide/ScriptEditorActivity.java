@@ -46,6 +46,8 @@ public class ScriptEditorActivity extends AppCompatActivity {
     LinearLayout mRunConfig;
     EditText mState, mPrevState, mGlobals, mSignatures;
     TextView mResults;
+    android.widget.HorizontalScrollView mChipScroller;
+    LinearLayout mChipRow;
 
     List<LintEngine.Lint> mLints;
 
@@ -53,7 +55,8 @@ public class ScriptEditorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_script_editor);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.editor_root), (v, insets) -> {
+        View editorRoot = findViewById(R.id.editor_root);
+        ViewCompat.setOnApplyWindowInsetsListener(editorRoot, (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
             // Pad for the keyboard too — edge-to-edge otherwise hides the editor's
@@ -62,12 +65,27 @@ public class ScriptEditorActivity extends AppCompatActivity {
                     Math.max(systemBars.bottom, ime.bottom));
             return insets;
         });
+        ViewCompat.requestApplyInsets(editorRoot);
 
         Toolbar tb = findViewById(R.id.editor_toolbar);
         tb.setTitle("Script Editor");
         setSupportActionBar(tb);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         tb.setNavigationOnClickListener(v -> finish());
+        tb.getMenu().add(0, 1, 0, "KISS VM reference");
+        tb.getMenu().add(0, 2, 1, "Minima docs");
+        tb.setOnMenuItemClickListener(mi -> {
+            if (mi.getItemId() == 1) {
+                showKissReference();
+                return true;
+            }
+            if (mi.getItemId() == 2) {
+                startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://docs.minima.global")));
+                return true;
+            }
+            return false;
+        });
 
         mDB = new ScriptDB(this);
         mNode = new NodeApi(this, null);
@@ -92,11 +110,26 @@ public class ScriptEditorActivity extends AppCompatActivity {
 
         mName.setText(script.name);
         mEditor.setText(script.source);
+        mState.setText(script.testState);
+        mPrevState.setText(script.testPrevState);
+        mGlobals.setText(script.testGlobals);
+        mSignatures.setText(script.testSignatures);
+        if (!script.testState.isEmpty() || !script.testPrevState.isEmpty()
+                || !script.testGlobals.isEmpty() || !script.testSignatures.isEmpty()) {
+            mRunConfig.setVisibility(View.VISIBLE);
+            ((Button) findViewById(R.id.editor_toggle_config)).setText("▼ Test inputs");
+        }
+        mChipScroller = findViewById(R.id.editor_chipscroller);
+        mChipRow = findViewById(R.id.editor_chiprow);
+
         mEditor.addTextChangedListener(new KissHighlighter(mEditor));
         mEditor.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) { updateStatus(); }
+            @Override public void afterTextChanged(Editable s) {
+                updateStatus();
+                updateEditorChips();
+            }
         });
 
         mStatusLine.setOnClickListener(v -> showLints());
@@ -128,6 +161,11 @@ public class ScriptEditorActivity extends AppCompatActivity {
         String name = mName.getText().toString().trim();
         if (name.isEmpty()) name = "untitled";
         mDB.update(mScriptId, name, mEditor.getText().toString());
+        mDB.saveTestInputs(mScriptId,
+                mState.getText().toString().trim(),
+                mPrevState.getText().toString().trim(),
+                mGlobals.getText().toString().trim(),
+                mSignatures.getText().toString().trim());
     }
 
     @Override
@@ -140,6 +178,105 @@ public class ScriptEditorActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (mNode != null) mNode.onDestroy();
+    }
+
+    /** Bundled KISS VM language reference (assets/kissvm.txt). */
+    private void showKissReference() {
+        String ref;
+        try {
+            java.io.InputStream in = getAssets().open("kissvm.txt");
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            in.close();
+            ref = out.toString("UTF-8");
+        } catch (java.io.IOException e) {
+            ref = "Reference unavailable";
+        }
+        TextView tv = new TextView(this);
+        tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+        tv.setTextSize(12);
+        tv.setTextColor(OutputFormatter.COL_PLAIN);
+        tv.setTextIsSelectable(true);
+        tv.setText(ref);
+        int pad = (int) (getResources().getDisplayMetrics().density * 16);
+        android.widget.ScrollView scroller = new android.widget.ScrollView(this);
+        scroller.setPadding(pad, pad / 2, pad, pad / 2);
+        scroller.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle("KISS VM reference")
+                .setView(scroller)
+                .setPositiveButton("Close", null)
+                .show();
+    }
+
+    // ---------------- editor autocomplete ----------------
+
+    /** Suggest KISS keywords / functions / @globals for the word being typed. */
+    private void updateEditorChips() {
+        mChipRow.removeAllViews();
+        String text = mEditor.getText().toString();
+        int cur = mEditor.getSelectionStart();
+        if (cur < 0 || cur > text.length()) cur = text.length();
+        int start = cur;
+        while (start > 0) {
+            char c = text.charAt(start - 1);
+            if (Character.isLetterOrDigit(c) || c == '@') start--;
+            else break;
+        }
+        String word = text.substring(start, cur);
+        if (word.isEmpty()) {
+            mChipScroller.setVisibility(View.GONE);
+            return;
+        }
+        String uw = word.toUpperCase();
+
+        java.util.List<String[]> matches = new java.util.ArrayList<>();   // {label, insert}
+        if (uw.startsWith("@")) {
+            for (String g : sorted(KissVm.GLOBALS)) {
+                if (g.startsWith(uw) && !g.equals(uw)) matches.add(new String[]{g, g + " "});
+            }
+        } else {
+            for (String k : sorted(KissVm.KEYWORDS)) {
+                if (k.startsWith(uw) && !k.equals(uw)) matches.add(new String[]{k, k + " "});
+            }
+            for (String f : sorted(KissVm.FUNCTIONS)) {
+                if (f.startsWith(uw) && !f.equals(uw)) matches.add(new String[]{f, f + "("});
+            }
+        }
+
+        final int wordStart = start, wordEnd = cur;
+        int count = 0;
+        for (String[] m : matches) {
+            if (count++ >= 20) break;
+            TextView chip = new TextView(this);
+            chip.setText(m[0]);
+            chip.setTypeface(android.graphics.Typeface.MONOSPACE);
+            chip.setTextSize(13);
+            chip.setTextColor(OutputFormatter.COL_CMD);
+            chip.setBackgroundResource(R.drawable.chip_bg);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 12, 0);
+            chip.setLayoutParams(lp);
+            int pad = (int) (getResources().getDisplayMetrics().density * 6);
+            chip.setPadding(pad * 2, pad, pad * 2, pad);
+            chip.setOnClickListener(v -> {
+                mEditor.getText().replace(wordStart, wordEnd, m[1]);
+                mEditor.setSelection(wordStart + m[1].length());
+            });
+            mChipRow.addView(chip);
+        }
+        mChipScroller.setVisibility(mChipRow.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        mChipScroller.scrollTo(0, 0);
+    }
+
+    private static java.util.List<String> sorted(java.util.Set<String> set) {
+        java.util.List<String> list = new java.util.ArrayList<>(set);
+        java.util.Collections.sort(list);
+        return list;
     }
 
     // ---------------- status / lints ----------------

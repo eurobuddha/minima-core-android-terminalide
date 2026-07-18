@@ -46,6 +46,7 @@ public class TxnView extends BaseView {
         wire(R.id.txn_create, v -> create());
         wire(R.id.txn_addinput, v -> pickCoin());
         wire(R.id.txn_addoutput, v -> outputDialog());
+        wire(R.id.txn_change, v -> addChange());
         wire(R.id.txn_setstate, v -> stateDialog());
         wire(R.id.txn_sign, v -> signDialog());
         wire(R.id.txn_basics, v -> simple("txnbasics", "MMR proofs + scripts added"));
@@ -151,6 +152,102 @@ public class TxnView extends BaseView {
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /**
+     * One-tap change output: reads txncheck's per-token input/output difference and
+     * sends every positive remainder back to one of your own addresses — the #1
+     * guard against accidental burns.
+     */
+    private void addChange() {
+        String id = txnId();
+        if (id == null) return;
+        setStatus("… calculating change", OutputFormatter.COL_DIM);
+        mNode.cmd("txncheck id:" + id, new NodeApi.Cb() {
+            @Override
+            public void onResult(JSONObject json) {
+                JSONObject resp = json.optJSONObject("response");
+                JSONArray coins = resp != null ? resp.optJSONArray("coins") : null;
+                if (coins == null) {
+                    setStatus("✖ no txn '" + id + "' — Create it first", OutputFormatter.COL_ERROR);
+                    return;
+                }
+                final java.util.List<String[]> changes = new java.util.ArrayList<>();  // {tokenid, amount}
+                StringBuilder planned = new StringBuilder();
+                for (int i = 0; i < coins.length(); i++) {
+                    JSONObject c = coins.optJSONObject(i);
+                    String tokenid = c.optString("tokenid", "0x00");
+                    String diff = c.optString("difference", "0");
+                    try {
+                        if (new BigDecimal(diff).compareTo(BigDecimal.ZERO) > 0) {
+                            changes.add(new String[]{tokenid, diff});
+                            planned.append(diff).append(" ")
+                                    .append(tokenid.equals("0x00") ? "MINIMA" : shorten(tokenid))
+                                    .append("\n");
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+                if (changes.isEmpty()) {
+                    setStatus("✓ inputs already equal outputs — no change needed",
+                            OutputFormatter.COL_STRING);
+                    return;
+                }
+                new AlertDialog.Builder(mActivity)
+                        .setTitle("Add change to your wallet")
+                        .setMessage("These leftovers would BURN on post. Send them back to "
+                                + "your own address?\n\n" + planned)
+                        .setPositiveButton("Add change", (d, w) -> fetchAddressAndAdd(id, changes))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
+
+            @Override
+            public void onError(String message) { nodeError(message); }
+        });
+    }
+
+    private void fetchAddressAndAdd(String id, java.util.List<String[]> changes) {
+        mNode.cmd("getaddress", new NodeApi.Cb() {
+            @Override
+            public void onResult(JSONObject json) {
+                JSONObject resp = json.optJSONObject("response");
+                String addr = resp != null ? resp.optString("miniaddress",
+                        resp.optString("address", "")) : "";
+                if (addr.isEmpty()) {
+                    setStatus("✖ couldn't fetch a wallet address", OutputFormatter.COL_ERROR);
+                    return;
+                }
+                addChangeOutputs(id, addr, changes, 0);
+            }
+
+            @Override
+            public void onError(String message) { nodeError(message); }
+        });
+    }
+
+    private void addChangeOutputs(String id, String addr, java.util.List<String[]> changes, int idx) {
+        if (idx >= changes.size()) {
+            setStatus("✓ change added — inputs now match outputs", OutputFormatter.COL_STRING);
+            refresh();
+            return;
+        }
+        String[] ch = changes.get(idx);
+        String cmd = "txnoutput id:" + id + " amount:" + ch[1] + " address:" + addr
+                + (ch[0].equals("0x00") ? "" : " tokenid:" + ch[0]) + " storestate:false";
+        mNode.cmd(cmd, new NodeApi.Cb() {
+            @Override
+            public void onResult(JSONObject json) {
+                if (!json.optBoolean("status", false)) {
+                    setStatus("✖ " + json.optString("error", "txnoutput failed"),
+                            OutputFormatter.COL_ERROR);
+                    return;
+                }
+                addChangeOutputs(id, addr, changes, idx + 1);
+            }
+
+            @Override
+            public void onError(String message) { nodeError(message); }
+        });
     }
 
     private void stateDialog() {

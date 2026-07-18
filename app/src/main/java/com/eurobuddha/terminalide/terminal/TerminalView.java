@@ -89,13 +89,13 @@ public class TerminalView extends BaseView {
         Button run = mMainView.findViewById(R.id.terminal_send);
         run.setOnClickListener(v -> submit());
 
-        Button up = mMainView.findViewById(R.id.terminal_hist_up);
-        Button down = mMainView.findViewById(R.id.terminal_hist_down);
+        TextView up = mMainView.findViewById(R.id.terminal_hist_up);
+        TextView down = mMainView.findViewById(R.id.terminal_hist_down);
         up.setOnClickListener(v -> histNav(1));
         down.setOnClickListener(v -> histNav(-1));
         up.setOnLongClickListener(v -> { showHistoryDialog(); return true; });
 
-        Button fav = mMainView.findViewById(R.id.terminal_fav);
+        TextView fav = mMainView.findViewById(R.id.terminal_fav);
         fav.setOnClickListener(v -> showFavoritesDialog());
         fav.setOnLongClickListener(v -> { saveFavorite(); return true; });
 
@@ -214,42 +214,33 @@ public class TerminalView extends BaseView {
 
     // ---------------- suggestions ----------------
 
+    private static final int MAX_CHIPS = 30;
+
     private void updateSuggestions(String text) {
         mChipRow.removeAllViews();
-        String trimmed = text.trim();
-        boolean firstToken = !text.contains(" ");
+        Suggest.Result res = Suggest.suggest(text);
 
-        if (firstToken) {
-            mParamHint.setVisibility(View.GONE);
-            for (String name : CommandRegistry.commandNames()) {
-                if (trimmed.isEmpty() || name.startsWith(trimmed)) {
-                    if (!name.equals(trimmed)) addChip(name, name + " ");
-                }
-            }
+        if (res.paramHint != null) {
+            mParamHint.setText(res.paramHint + "   (tap for help)");
+            mParamHint.setVisibility(View.VISIBLE);
+            final String helpCmd = res.paramHint.split(" ")[0];
+            mParamHint.setOnClickListener(v -> showHelpDialog(helpCmd));
         } else {
-            String cmdName = text.split(" ")[0];
-            String hint = CommandRegistry.paramsFor(cmdName);
-            if (hint != null) {
-                mParamHint.setText(hint);
-                mParamHint.setVisibility(View.VISIBLE);
-                // Suggest param keys not already present.
-                String params = hint.substring(cmdName.length()).trim();
-                for (String p : params.split("\\s+")) {
-                    if (!p.endsWith(":")) continue;
-                    if (!text.contains(p)) addChip(p, null);
-                }
-            } else {
-                mParamHint.setVisibility(View.GONE);
-            }
+            mParamHint.setVisibility(View.GONE);
+        }
+
+        int count = 0;
+        for (Suggest.Item item : res.items) {
+            if (count++ >= MAX_CHIPS) break;
+            addChip(item);
         }
         mChipScroller.setVisibility(mChipRow.getChildCount() > 0 ? View.VISIBLE : View.GONE);
         mChipScroller.scrollTo(0, 0);
     }
 
-    private void addChip(String label, String replaceAll) {
-        if (mChipRow.getChildCount() >= 12) return;
+    private void addChip(Suggest.Item item) {
         TextView chip = new TextView(mActivity);
-        chip.setText(label);
+        chip.setText(item.label);
         chip.setTypeface(Typeface.MONOSPACE);
         chip.setTextSize(13);
         chip.setTextColor(OutputFormatter.COL_CMD);
@@ -261,16 +252,37 @@ public class TerminalView extends BaseView {
         int pad = (int) (mActivity.getResources().getDisplayMetrics().density * 6);
         chip.setPadding(pad * 2, pad, pad * 2, pad);
         chip.setOnClickListener(v -> {
-            if (replaceAll != null) {
-                mInput.setText(replaceAll);
-            } else {
-                String cur = mInput.getText().toString();
-                if (!cur.endsWith(" ")) cur += " ";
-                mInput.setText(cur + label);
-            }
+            mInput.setText(item.newText);
             mInput.setSelection(mInput.getText().length());
         });
+        // Long-press a command chip: its full help page, offline.
+        if (HelpStore.has(mActivity, item.label)) {
+            chip.setOnLongClickListener(v -> {
+                showHelpDialog(item.label);
+                return true;
+            });
+        }
         mChipRow.addView(chip);
+    }
+
+    private void showHelpDialog(String command) {
+        String full = HelpStore.full(mActivity, command);
+        if (full == null) return;
+        TextView tv = new TextView(mActivity);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextSize(12);
+        tv.setTextColor(OutputFormatter.COL_PLAIN);
+        tv.setTextIsSelectable(true);
+        tv.setText(full);
+        int pad = (int) (mActivity.getResources().getDisplayMetrics().density * 16);
+        ScrollView scroller = new ScrollView(mActivity);
+        scroller.setPadding(pad, pad / 2, pad, pad / 2);
+        scroller.addView(tv);
+        new AlertDialog.Builder(mActivity)
+                .setTitle(command)
+                .setView(scroller)
+                .setPositiveButton("Close", null)
+                .show();
     }
 
     // ---------------- execution ----------------
@@ -303,13 +315,20 @@ public class TerminalView extends BaseView {
             public void onResult(JSONObject json) {
                 long ms = System.currentTimeMillis() - start;
                 boolean failed = !json.optBoolean("status", true);
-                String pretty;
-                try {
-                    pretty = json.toString(2);
-                } catch (JSONException e) {
-                    pretty = json.toString();
+
+                CharSequence rendered = renderHelp(zCommand, json);
+                if (rendered == null) {
+                    String pretty;
+                    try {
+                        pretty = json.toString(2);
+                    } catch (JSONException e) {
+                        pretty = json.toString();
+                    }
+                    // Render embedded multi-line text as real lines, not \n-escaped strings.
+                    pretty = pretty.replace("\\n", "\n").replace("\\t", "    ");
+                    rendered = OutputFormatter.json(pretty, false);
                 }
-                result.setText(OutputFormatter.json(pretty, false));
+                result.setText(rendered);
                 if (failed) {
                     result.append(OutputFormatter.colored("\n✖ command failed", OutputFormatter.COL_ERROR));
                 }
@@ -331,6 +350,56 @@ public class TerminalView extends BaseView {
         });
     }
 
+    /**
+     * Dedicated renderer for help — a terminal shows help as a formatted page,
+     * not a JSON blob. Returns null for non-help commands (fall back to JSON).
+     */
+    private CharSequence renderHelp(String command, JSONObject json) {
+        if (!command.trim().startsWith("help")) return null;
+        JSONObject resp = json.optJSONObject("response");
+        if (resp == null) return null;
+
+        // help command:x -> title + full help page.
+        String fullhelp = resp.optString("fullhelp", "");
+        if (!fullhelp.isEmpty()) {
+            android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+            sb.append(OutputFormatter.colored(resp.optString("command", "") + "  "
+                    + resp.optString("help", ""), OutputFormatter.COL_KEY));
+            sb.append(OutputFormatter.colored("\n\n" + fullhelp.replace("\\n", "\n")
+                    .replace("\\t", "    ").trim(), OutputFormatter.COL_PLAIN));
+            return sb;
+        }
+
+        // bare help -> aligned "command  description" listing.
+        java.util.Iterator<String> keys = resp.keys();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        while (keys.hasNext()) {
+            String k = keys.next();
+            if (resp.opt(k) instanceof String) names.add(k);
+        }
+        if (names.isEmpty()) return null;
+        java.util.Collections.sort(names);
+        int width = 0;
+        for (String n : names) width = Math.max(width, n.length());
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        for (String n : names) {
+            StringBuilder pad = new StringBuilder(n);
+            while (pad.length() < width + 2) pad.append(' ');
+            sb.append(OutputFormatter.colored(pad.toString(), OutputFormatter.COL_KEY));
+            sb.append(OutputFormatter.colored(resp.optString(n) + "\n", OutputFormatter.COL_PLAIN));
+        }
+        return sb;
+    }
+
+    /** Full session text (for sharing/export). */
+    public String exportText() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < mOutput.getChildCount(); i++) {
+            sb.append(((TextView) mOutput.getChildAt(i)).getText()).append("\n\n");
+        }
+        return sb.toString();
+    }
+
     // ---------------- output ----------------
 
     private TextView appendEntry(CharSequence text) {
@@ -342,12 +411,8 @@ public class TerminalView extends BaseView {
         tv.setTextSize(13);
         tv.setText(text);
         tv.setPadding(0, 8, 0, 8);
-        tv.setOnLongClickListener(v -> {
-            ClipboardManager cb = (ClipboardManager) mActivity.getSystemService(Context.CLIPBOARD_SERVICE);
-            cb.setPrimaryClip(ClipData.newPlainText("terminal", tv.getText().toString()));
-            Toast.makeText(mActivity, "Copied", Toast.LENGTH_SHORT).show();
-            return true;
-        });
+        // Native selection: long-press selects, drag handles, Copy/Select-all toolbar.
+        tv.setTextIsSelectable(true);
         mOutput.addView(tv);
         scrollToBottom();
         return tv;

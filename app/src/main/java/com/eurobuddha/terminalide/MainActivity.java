@@ -10,7 +10,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -57,17 +56,20 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+
+        // NO EdgeToEdge.enable() — matching the proven sibling apps (utxo/mail/wallet).
+        // On Android 14 the window then genuinely resizes for the keyboard (adjustResize);
+        // on Android 15 edge-to-edge is enforced and this listener pads for bars + IME.
+        View root = findViewById(R.id.main);
+        ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-            // Pad for the keyboard too — edge-to-edge otherwise leaves the input row
-            // hidden underneath it.
             v.setPadding(systemBars.left, systemBars.top, systemBars.right,
                     Math.max(systemBars.bottom, ime.bottom));
             return insets;
         });
+        ViewCompat.requestApplyInsets(root);
 
         mToolbar = findViewById(R.id.toolbar);
         mToolbar.setTitle("Terminal IDE");
@@ -104,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
         });
         mAdapter.getTerminalView().setNodeApi(mNode);
         mAdapter.getTxnView().setNodeApi(mNode);
+        mAdapter.getScriptsView().setNodeApi(mNode);
 
         IntentFilter filter = new IntentFilter(MinimaAPIMessages.MINIMA_API_NOTIFY);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
@@ -139,7 +142,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(0, 1, 0, "Clear terminal");
-        menu.add(0, 2, 1, "About");
+        menu.add(0, 3, 1, "Share session…");
+        menu.add(0, 4, 2, "Minima docs");
+        menu.add(0, 2, 3, "About");
         return true;
     }
 
@@ -147,6 +152,18 @@ public class MainActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == 1) {
             mAdapter.getTerminalView().clearTerminal();
+            return true;
+        }
+        if (item.getItemId() == 3) {
+            Intent share = new Intent(Intent.ACTION_SEND);
+            share.setType("text/plain");
+            share.putExtra(Intent.EXTRA_TEXT, mAdapter.getTerminalView().exportText());
+            startActivity(Intent.createChooser(share, "Share terminal session"));
+            return true;
+        }
+        if (item.getItemId() == 4) {
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://docs.minima.global")));
             return true;
         }
         if (item.getItemId() == 2) {

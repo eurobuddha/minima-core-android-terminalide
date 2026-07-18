@@ -12,7 +12,7 @@ import java.util.List;
 /** Local library of KISS VM scripts. */
 public class ScriptDB extends SQLiteOpenHelper {
 
-    public static final int DATABASE_VERSION = 1;
+    public static final int DATABASE_VERSION = 2;
     public static final String DATABASE_NAME = "scripts.db";
 
     public static class Script {
@@ -21,6 +21,11 @@ public class ScriptDB extends SQLiteOpenHelper {
         public String source;
         public long modified;
         public String address;   // deployed address, or ""
+        // Persisted runscript test inputs so contract iteration survives editor restarts.
+        public String testState = "";
+        public String testPrevState = "";
+        public String testGlobals = "";
+        public String testSignatures = "";
     }
 
     private final SQLiteDatabase mDB;
@@ -37,12 +42,31 @@ public class ScriptDB extends SQLiteOpenHelper {
                 + "name text not null,"
                 + "source text not null,"
                 + "modified integer not null,"
-                + "address text not null default '')");
+                + "address text not null default '',"
+                + "teststate text not null default '',"
+                + "testprev text not null default '',"
+                + "testglobals text not null default '',"
+                + "testsigs text not null default '')");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        // Never drop user scripts on upgrade; migrations added per-version when needed.
+        // Never drop user scripts; additive migrations only.
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE scripts ADD COLUMN teststate text not null default ''");
+            db.execSQL("ALTER TABLE scripts ADD COLUMN testprev text not null default ''");
+            db.execSQL("ALTER TABLE scripts ADD COLUMN testglobals text not null default ''");
+            db.execSQL("ALTER TABLE scripts ADD COLUMN testsigs text not null default ''");
+        }
+    }
+
+    public void saveTestInputs(long id, String state, String prev, String globals, String sigs) {
+        ContentValues v = new ContentValues();
+        v.put("teststate", state);
+        v.put("testprev", prev);
+        v.put("testglobals", globals);
+        v.put("testsigs", sigs);
+        mDB.update("scripts", v, "_id=?", new String[]{"" + id});
     }
 
     public long insert(String name, String source) {
@@ -100,6 +124,10 @@ public class ScriptDB extends SQLiteOpenHelper {
         s.source = c.getString(c.getColumnIndexOrThrow("source"));
         s.modified = c.getLong(c.getColumnIndexOrThrow("modified"));
         s.address = c.getString(c.getColumnIndexOrThrow("address"));
+        s.testState = c.getString(c.getColumnIndexOrThrow("teststate"));
+        s.testPrevState = c.getString(c.getColumnIndexOrThrow("testprev"));
+        s.testGlobals = c.getString(c.getColumnIndexOrThrow("testglobals"));
+        s.testSignatures = c.getString(c.getColumnIndexOrThrow("testsigs"));
         return s;
     }
 }

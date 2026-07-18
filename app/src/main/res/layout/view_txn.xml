@@ -56,6 +56,8 @@
                 android:layout_height="wrap_content" android:layout_marginEnd="4dp" android:text="+ Input" />
             <Button android:id="@+id/txn_addoutput" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_marginEnd="4dp" android:text="+ Output" />
+            <Button android:id="@+id/txn_change" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:layout_marginEnd="4dp" android:text="+ Change" />
             <Button android:id="@+id/txn_setstate" android:layout_width="wrap_content"
                 android:layout_height="wrap_content" android:layout_marginEnd="4dp" android:text="State" />
             <Button android:id="@+id/txn_sign" android:layout_width="wrap_content"

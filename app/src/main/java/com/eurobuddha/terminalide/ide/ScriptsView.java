@@ -13,15 +13,21 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 
 import com.eurobuddha.terminalide.BaseView;
+import com.eurobuddha.terminalide.NodeApi;
 import com.eurobuddha.terminalide.R;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Script library tab: list, create (blank/template), open in editor, duplicate/delete. */
+/** Script library tab: list, create (blank/template), open in editor, duplicate/delete,
+ *  plus a browser for scripts already registered on the node (with import). */
 public class ScriptsView extends BaseView {
 
     ScriptDB mDB;
+    NodeApi mNode;
     ListView mList;
     TextView mEmpty;
     List<ScriptDB.Script> mScripts = new ArrayList<>();
@@ -35,6 +41,9 @@ public class ScriptsView extends BaseView {
 
         Button add = mMainView.findViewById(R.id.scripts_new);
         add.setOnClickListener(v -> newScriptDialog());
+
+        Button node = mMainView.findViewById(R.id.scripts_node);
+        node.setOnClickListener(v -> showNodeScripts());
 
         mList.setOnItemClickListener((parent, view, pos, id) -> openEditor(mScripts.get(pos).id));
         mList.setOnItemLongClickListener((parent, view, pos, id) -> {
@@ -119,5 +128,69 @@ public class ScriptsView extends BaseView {
         Intent i = new Intent(mActivity, ScriptEditorActivity.class);
         i.putExtra("script_id", scriptId);
         mActivity.startActivity(i);
+    }
+
+    public void setNodeApi(NodeApi zNode) {
+        mNode = zNode;
+    }
+
+    /** Browse scripts registered on the node (the `scripts` command) and import them. */
+    private void showNodeScripts() {
+        if (mNode == null) return;
+        Toast.makeText(mActivity, "Loading node scripts…", Toast.LENGTH_SHORT).show();
+        mNode.cmd("scripts", new NodeApi.Cb() {
+            @Override
+            public void onResult(JSONObject json) {
+                JSONArray arr = json.optJSONArray("response");
+                if (arr == null || arr.length() == 0) {
+                    Toast.makeText(mActivity, "No scripts on the node", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                int n = arr.length();
+                String[] labels = new String[n];
+                String[] scripts = new String[n];
+                String[] addresses = new String[n];
+                for (int i = 0; i < n; i++) {
+                    JSONObject s = arr.optJSONObject(i);
+                    scripts[i] = s.optString("script", "");
+                    addresses[i] = s.optString("address", "");
+                    boolean def = s.optBoolean("default", false);
+                    String snippet = scripts[i].length() > 60
+                            ? scripts[i].substring(0, 60) + "…" : scripts[i];
+                    labels[i] = (def ? "[wallet] " : "") + shorten(addresses[i]) + "\n" + snippet;
+                }
+                new AlertDialog.Builder(mActivity)
+                        .setTitle("Scripts on node (" + n + ")")
+                        .setItems(labels, (d, which) -> nodeScriptActions(
+                                addresses[which], scripts[which]))
+                        .setNegativeButton("Close", null)
+                        .show();
+            }
+
+            @Override
+            public void onError(String message) {
+                Toast.makeText(mActivity, "Node error: " + message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void nodeScriptActions(String address, String script) {
+        new AlertDialog.Builder(mActivity)
+                .setTitle(shorten(address))
+                .setMessage(script)
+                .setPositiveButton("Import to library", (d, w) -> {
+                    long id = mDB.insert("from node " + shorten(address), script);
+                    mDB.setAddress(id, address);
+                    refreshView();
+                    openEditor(id);
+                })
+                .setNeutralButton("Copy address", (d, w) -> {
+                    android.content.ClipboardManager cb = (android.content.ClipboardManager)
+                            mActivity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("address", address));
+                    Toast.makeText(mActivity, "Copied", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 }
