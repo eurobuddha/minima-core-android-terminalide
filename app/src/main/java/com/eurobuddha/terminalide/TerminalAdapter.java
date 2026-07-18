@@ -73,4 +73,10 @@ public class TerminalAdapter extends PagerAdapter {
             }
         }
     }
+
+    public void onDestroy() {
+        for (BaseView v : mAllViews) {
+            if (v != null) v.onDestroy();
+        }
+    }
 }

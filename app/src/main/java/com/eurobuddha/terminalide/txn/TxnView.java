@@ -72,7 +72,35 @@ public class TxnView extends BaseView {
             Toast.makeText(mActivity, "Set a transaction id first", Toast.LENGTH_SHORT).show();
             return null;
         }
+        if (hasCommandChars(id)) {
+            Toast.makeText(mActivity, "Transaction id can't contain spaces or ':'", Toast.LENGTH_SHORT).show();
+            return null;
+        }
         return id;
+    }
+
+    /**
+     * A field is concatenated straight into a space-delimited node command, so any
+     * whitespace or ':' would inject/split params (amount "1 000" -> stray param,
+     * address "Mx.. burn:9" -> unintended burn). Reject up front.
+     */
+    private static boolean hasCommandChars(String s) {
+        return s.contains(" ") || s.contains("\t") || s.contains("\n")
+                || s.contains(";") || s.contains(":");
+    }
+
+    /** Validates a value that legitimately may contain ':' (only reject whitespace/;). */
+    private static boolean hasWhitespaceOrSemicolon(String s) {
+        return s.contains(" ") || s.contains("\t") || s.contains("\n") || s.contains(";");
+    }
+
+    private boolean rejectBadField(String label, String value, boolean allowColon) {
+        boolean bad = allowColon ? hasWhitespaceOrSemicolon(value) : hasCommandChars(value);
+        if (bad) {
+            Toast.makeText(mActivity, label + " can't contain spaces"
+                    + (allowColon ? " or ';'" : ", ':' or ';'"), Toast.LENGTH_LONG).show();
+        }
+        return bad;
     }
 
     private void setStatus(String text, int color) {
@@ -91,7 +119,11 @@ public class TxnView extends BaseView {
         String id = txnId();
         if (id == null) return;
         setStatus("… loading your coins", OutputFormatter.COL_DIM);
-        mNode.cmd("coins relevant:true sendable:true", new NodeApi.Cb() {
+        // Shrink the reply at the SOURCE with simplestate:true (drops the large per-coin
+        // state blobs) — an over-limit Binder reply crashes app+node uncatchably (see
+        // minima-ipc-gotchas). We keep relevant+sendable (never hide coins by age) and
+        // the coin picker doesn't need state, so this is lossless for our purpose.
+        mNode.cmd("coins relevant:true sendable:true simplestate:true", new NodeApi.Cb() {
             @Override
             public void onResult(JSONObject json) {
                 JSONArray coins = json.optJSONArray("response");
@@ -100,6 +132,7 @@ public class TxnView extends BaseView {
                     return;
                 }
                 int n = Math.min(coins.length(), 100);
+                boolean capped = coins.length() > n;
                 String[] labels = new String[n];
                 String[] coinids = new String[n];
                 for (int i = 0; i < n; i++) {
@@ -110,8 +143,10 @@ public class TxnView extends BaseView {
                     coinids[i] = c.optString("coinid", "");
                     labels[i] = amount + " " + token + "\n" + shorten(coinids[i]);
                 }
+                String title = capped ? "Add input coin (first " + n + " of " + coins.length() + ")"
+                        : "Add input coin (" + coins.length() + " sendable)";
                 new AlertDialog.Builder(mActivity)
-                        .setTitle("Add input coin (" + coins.length() + " sendable)")
+                        .setTitle(title)
                         .setItems(labels, (d, which) ->
                                 run("txninput id:" + id + " coinid:" + coinids[which],
                                         "input added", true))
@@ -145,6 +180,10 @@ public class TxnView extends BaseView {
                         return;
                     }
                     String tok = tokenid.getText().toString().trim();
+                    if (rejectBadField("Amount", amt, false) || rejectBadField("Address", addr, false)
+                            || rejectBadField("Token id", tok, false)) {
+                        return;
+                    }
                     String cmd = "txnoutput id:" + id + " amount:" + amt + " address:" + addr
                             + (tok.isEmpty() ? "" : " tokenid:" + tok)
                             + " storestate:" + storestate.isChecked();
@@ -159,9 +198,19 @@ public class TxnView extends BaseView {
      * sends every positive remainder back to one of your own addresses — the #1
      * guard against accidental burns.
      */
+    // Guards the whole async change flow (txncheck → dialog → getaddress → txnoutput*)
+    // so a double-tap can't run two flows that both see the same pre-change difference
+    // and add change twice (outputs > inputs → rejected/over-send).
+    private boolean mChangeInFlight = false;
+
     private void addChange() {
         String id = txnId();
         if (id == null) return;
+        if (mChangeInFlight) {
+            Toast.makeText(mActivity, "Change calculation already in progress", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mChangeInFlight = true;
         setStatus("… calculating change", OutputFormatter.COL_DIM);
         mNode.cmd("txncheck id:" + id, new NodeApi.Cb() {
             @Override
@@ -169,6 +218,7 @@ public class TxnView extends BaseView {
                 JSONObject resp = json.optJSONObject("response");
                 JSONArray coins = resp != null ? resp.optJSONArray("coins") : null;
                 if (coins == null) {
+                    mChangeInFlight = false;
                     setStatus("✖ no txn '" + id + "' — Create it first", OutputFormatter.COL_ERROR);
                     return;
                 }
@@ -176,6 +226,7 @@ public class TxnView extends BaseView {
                 StringBuilder planned = new StringBuilder();
                 for (int i = 0; i < coins.length(); i++) {
                     JSONObject c = coins.optJSONObject(i);
+                    if (c == null) continue;
                     String tokenid = c.optString("tokenid", "0x00");
                     String diff = c.optString("difference", "0");
                     try {
@@ -188,6 +239,7 @@ public class TxnView extends BaseView {
                     } catch (NumberFormatException ignored) {}
                 }
                 if (changes.isEmpty()) {
+                    mChangeInFlight = false;
                     setStatus("✓ inputs already equal outputs — no change needed",
                             OutputFormatter.COL_STRING);
                     return;
@@ -197,12 +249,16 @@ public class TxnView extends BaseView {
                         .setMessage("These leftovers would BURN on post. Send them back to "
                                 + "your own address?\n\n" + planned)
                         .setPositiveButton("Add change", (d, w) -> fetchAddressAndAdd(id, changes))
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton("Cancel", (d, w) -> mChangeInFlight = false)
+                        .setOnCancelListener(d -> mChangeInFlight = false)
                         .show();
             }
 
             @Override
-            public void onError(String message) { nodeError(message); }
+            public void onError(String message) {
+                mChangeInFlight = false;
+                nodeError(message);
+            }
         });
     }
 
@@ -214,6 +270,7 @@ public class TxnView extends BaseView {
                 String addr = resp != null ? resp.optString("miniaddress",
                         resp.optString("address", "")) : "";
                 if (addr.isEmpty()) {
+                    mChangeInFlight = false;
                     setStatus("✖ couldn't fetch a wallet address", OutputFormatter.COL_ERROR);
                     return;
                 }
@@ -221,13 +278,18 @@ public class TxnView extends BaseView {
             }
 
             @Override
-            public void onError(String message) { nodeError(message); }
+            public void onError(String message) {
+                mChangeInFlight = false;
+                nodeError(message);
+            }
         });
     }
 
     private void addChangeOutputs(String id, String addr, java.util.List<String[]> changes, int idx) {
         if (idx >= changes.size()) {
-            setStatus("✓ change added — inputs now match outputs", OutputFormatter.COL_STRING);
+            mChangeInFlight = false;
+            setStatus("✓ change added for all " + changes.size()
+                    + " token(s) — inputs now match outputs", OutputFormatter.COL_STRING);
             refresh();
             return;
         }
@@ -238,7 +300,19 @@ public class TxnView extends BaseView {
             @Override
             public void onResult(JSONObject json) {
                 if (!json.optBoolean("status", false)) {
-                    setStatus("✖ " + json.optString("error", "txnoutput failed"),
+                    // Mid-chain failure: tokens 0..idx-1 got change, idx.. did NOT and will
+                    // still BURN. Name what's left exposed so the user can fix or txndelete.
+                    mChangeInFlight = false;
+                    StringBuilder left = new StringBuilder();
+                    for (int j = idx; j < changes.size(); j++) {
+                        left.append(changes.get(j)[1]).append(" ")
+                                .append(changes.get(j)[0].equals("0x00") ? "MINIMA"
+                                        : shorten(changes.get(j)[0])).append("\n");
+                    }
+                    setStatus("✖ change failed on token " + (idx + 1) + "/" + changes.size()
+                            + ": " + json.optString("error", "txnoutput failed")
+                            + "\n\n⚠ Still unbalanced (would BURN on post):\n" + left
+                            + "\nFix these or Delete the txn before posting.",
                             OutputFormatter.COL_ERROR);
                     return;
                 }
@@ -246,7 +320,10 @@ public class TxnView extends BaseView {
             }
 
             @Override
-            public void onError(String message) { nodeError(message); }
+            public void onError(String message) {
+                mChangeInFlight = false;
+                nodeError(message);
+            }
         });
     }
 
@@ -277,6 +354,8 @@ public class TxnView extends BaseView {
                         Toast.makeText(mActivity, "Port and value required", Toast.LENGTH_SHORT).show();
                         return;
                     }
+                    // value may be hex (0x..) but must not carry spaces/';' onto the command line.
+                    if (rejectBadField("Port", p, false) || rejectBadField("Value", val, true)) return;
                     run("txnstate id:" + id + " port:" + p + " value:" + val, "state set", true);
                 })
                 .setNegativeButton("Cancel", null)
@@ -295,6 +374,7 @@ public class TxnView extends BaseView {
                 .setView(key)
                 .setPositiveButton("Sign", (d, w) -> {
                     String k = key.getText().toString().trim();
+                    if (rejectBadField("Public key", k, false)) return;
                     run("txnsign id:" + id + " publickey:" + (k.isEmpty() ? "auto" : k),
                             "signed — now run Basics", true);
                 })
@@ -322,6 +402,7 @@ public class TxnView extends BaseView {
                 .setView(burn)
                 .setPositiveButton("Post", (d, w) -> {
                     String b = burn.getText().toString().trim();
+                    if (rejectBadField("Burn", b, false)) return;
                     run("txnpost id:" + id + (b.isEmpty() ? "" : " burn:" + b),
                             "posted — status:true means accepted; it mines over the next blocks", true);
                 })
@@ -366,6 +447,7 @@ public class TxnView extends BaseView {
                 .setPositiveButton("Import", (d, w) -> {
                     String hex = data.getText().toString().trim();
                     if (hex.isEmpty()) return;
+                    if (rejectBadField("Import data", hex, false)) return;
                     run("txnimport id:" + id + " data:" + hex, "imported", true);
                 })
                 .setNegativeButton("Cancel", null)
@@ -388,12 +470,29 @@ public class TxnView extends BaseView {
         mNode.cmd("txnlist", new NodeApi.Cb() {
             @Override
             public void onResult(JSONObject json) {
-                try {
-                    setStatus(json.toString(2), OutputFormatter.COL_PLAIN);
-                    mStatus.setText(OutputFormatter.json(json.toString(2), false));
-                } catch (JSONException e) {
-                    setStatus(json.toString(), OutputFormatter.COL_PLAIN);
+                // txnlist returns EVERY pending txn with full inputs/outputs/MMR proofs —
+                // rendering the raw pretty-print can be huge and janks the main thread.
+                // Show a compact id + in/out-count summary instead.
+                JSONArray arr = json.optJSONArray("response");
+                if (arr == null || arr.length() == 0) {
+                    setStatus("No pending transactions", OutputFormatter.COL_DIM);
+                    return;
                 }
+                StringBuilder sb = new StringBuilder(arr.length() + " pending transaction(s):\n\n");
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject t = arr.optJSONObject(i);
+                    if (t == null) continue;
+                    String tid = t.optString("id", "?");
+                    JSONObject txn = t.optJSONObject("transaction");
+                    int ins = txn != null && txn.optJSONArray("inputs") != null
+                            ? txn.optJSONArray("inputs").length() : 0;
+                    int outs = txn != null && txn.optJSONArray("outputs") != null
+                            ? txn.optJSONArray("outputs").length() : 0;
+                    sb.append("• ").append(tid).append("  ")
+                            .append(ins).append(" in / ").append(outs).append(" out\n");
+                }
+                sb.append("\nType an id above + Check to inspect one.");
+                setStatus(sb.toString(), OutputFormatter.COL_PLAIN);
             }
 
             @Override

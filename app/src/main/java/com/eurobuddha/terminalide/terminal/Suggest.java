@@ -20,13 +20,18 @@ import java.util.List;
  */
 public class Suggest {
 
-    /** One suggestion chip: label shown; tapping replaces the whole input with newText. */
+    /**
+     * One suggestion chip. Tapping splices `insert` into the input in place of the token
+     * being completed: newText = text[0..tokenStart) + insert + text[caret..end).
+     */
     public static class Item {
         public final String label;
-        public final String newText;
-        Item(String label, String newText) {
+        public final int tokenStart;   // where the completed token begins
+        public final String insert;    // replacement for text[tokenStart..caret)
+        Item(String label, int tokenStart, String insert) {
             this.label = label;
-            this.newText = newText;
+            this.tokenStart = tokenStart;
+            this.insert = insert;
         }
     }
 
@@ -36,30 +41,41 @@ public class Suggest {
     }
 
     public static Result suggest(String text) {
-        Result r = new Result();
+        return suggest(text, text.length());
+    }
 
-        // Complete only the segment after the last ';' (multi-command chains).
-        int segStart = text.lastIndexOf(';') + 1;
-        String seg = text.substring(segStart);
+    /**
+     * Complete the token ending at `caret` (not the end of the string) so chips work
+     * even when the user edits mid-line.
+     */
+    public static Result suggest(String text, int caret) {
+        Result r = new Result();
+        if (caret < 0 || caret > text.length()) caret = text.length();
+        String upto = text.substring(0, caret);
+
+        // Complete only the segment after the last ';' before the caret (multi-command chains).
+        int segStart = upto.lastIndexOf(';') + 1;
+        String seg = upto.substring(segStart);
         int lead = 0;
         while (lead < seg.length() && seg.charAt(lead) == ' ') lead++;
         String body = seg.substring(lead);
-        String beforeBody = text.substring(0, segStart + lead);
 
         int firstSpace = body.indexOf(' ');
         if (firstSpace < 0) {
-            // Typing the command name itself.
+            // Typing the command name itself. Token starts at segStart+lead.
+            int tokStart = segStart + lead;
             for (CommandRegistry.Cmd c : CommandRegistry.all()) {
                 if (c.name.startsWith(body) && !c.name.equals(body)) {
-                    r.items.add(new Item(c.name, beforeBody + c.name + " "));
+                    r.items.add(new Item(c.name, tokStart, c.name + " "));
                 }
             }
-            // Exact command fully typed (no trailing space yet): offer its params as well.
+            // Exact command fully typed (no trailing space yet): offer its params too.
             CommandRegistry.Cmd exact = CommandRegistry.get(body);
             if (exact != null) {
                 r.paramHint = exact.usage();
                 for (CommandRegistry.Param p : exact.params) {
-                    r.items.add(new Item(p.name + ":", text + " " + p.name + ":"));
+                    // Append after the command word (caret) rather than replacing it.
+                    r.items.add(new Item(p.name + ":", caret, " " + p.name + ":"));
                 }
             }
             return r;
@@ -70,10 +86,10 @@ public class Suggest {
         if (cmd == null) return r;
         r.paramHint = cmd.usage();
 
-        // The token in progress = after the last space of the segment.
+        // The token in progress = after the last space before the caret.
         int lastSpace = seg.lastIndexOf(' ');
         String token = seg.substring(lastSpace + 1);
-        String beforeToken = text.substring(0, segStart + lastSpace + 1);
+        int tokStart = segStart + lastSpace + 1;
 
         int colon = token.indexOf(':');
         if (colon >= 0) {
@@ -82,7 +98,7 @@ public class Suggest {
             String partial = token.substring(colon + 1);
             for (String v : valuesFor(cmd, key)) {
                 if (v.startsWith(partial) && !v.equals(partial)) {
-                    r.items.add(new Item(v, beforeToken + key + ":" + v + " "));
+                    r.items.add(new Item(v, tokStart, key + ":" + v + " "));
                 }
             }
         } else {
@@ -90,10 +106,24 @@ public class Suggest {
             for (CommandRegistry.Param p : cmd.params) {
                 if (!p.name.startsWith(token)) continue;
                 if (seg.contains(" " + p.name + ":")) continue;
-                r.items.add(new Item(p.name + ":", beforeToken + p.name + ":"));
+                r.items.add(new Item(p.name + ":", tokStart, p.name + ":"));
             }
         }
         return r;
+    }
+
+    /** Applies a chip against the CURRENT text + caret (re-derived at click time). */
+    public static String apply(String text, int caret, Item item) {
+        if (caret < 0 || caret > text.length()) caret = text.length();
+        int start = Math.min(item.tokenStart, caret);
+        return text.substring(0, start) + item.insert + text.substring(caret);
+    }
+
+    /** New caret position after applying `item`. */
+    public static int applyCaret(String text, int caret, Item item) {
+        if (caret < 0 || caret > text.length()) caret = text.length();
+        int start = Math.min(item.tokenStart, caret);
+        return start + item.insert.length();
     }
 
     private static List<String> valuesFor(CommandRegistry.Cmd cmd, String key) {

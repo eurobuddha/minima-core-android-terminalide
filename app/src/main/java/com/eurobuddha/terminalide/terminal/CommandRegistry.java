@@ -235,9 +235,16 @@ public class CommandRegistry {
             }
         }
         if (name.equals("history")) {
-            int max = -1;
+            long max = -1;
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("max:(\\d+)").matcher(cmd);
-            if (m.find()) max = Integer.parseInt(m.group(1));
+            if (m.find()) {
+                // \d+ can exceed Integer/Long range — parse defensively; unparseable = unbounded.
+                try {
+                    max = Long.parseLong(m.group(1));
+                } catch (NumberFormatException e) {
+                    max = Long.MAX_VALUE;
+                }
+            }
             if (max < 0 || max > 25) {
                 return "'history' returns FULL txpow bodies (~14KB each; default max ~100) and can "
                         + "exceed the IPC limits — big replies crash the node/app. Use max:8 or "

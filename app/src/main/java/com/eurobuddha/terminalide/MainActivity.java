@@ -195,5 +195,6 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         if (mReceiverRegistered) unregisterReceiver(mNotifyReceiver);
         if (mNode != null) mNode.onDestroy();
+        if (mAdapter != null) mAdapter.onDestroy();
     }
 }

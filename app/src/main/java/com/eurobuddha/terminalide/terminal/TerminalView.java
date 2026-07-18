@@ -121,6 +121,11 @@ public class TerminalView extends BaseView {
         banner();
     }
 
+    @Override
+    public void onDestroy() {
+        if (mHistory != null) mHistory.close();
+    }
+
     // ---------------- input / history ----------------
 
     private void submit() {
@@ -218,7 +223,8 @@ public class TerminalView extends BaseView {
 
     private void updateSuggestions(String text) {
         mChipRow.removeAllViews();
-        Suggest.Result res = Suggest.suggest(text);
+        int caret = mInput.getSelectionStart();
+        Suggest.Result res = Suggest.suggest(text, caret);
 
         if (res.paramHint != null) {
             mParamHint.setText(res.paramHint + "   (tap for help)");
@@ -252,8 +258,12 @@ public class TerminalView extends BaseView {
         int pad = (int) (mActivity.getResources().getDisplayMetrics().density * 6);
         chip.setPadding(pad * 2, pad, pad * 2, pad);
         chip.setOnClickListener(v -> {
-            mInput.setText(item.newText);
-            mInput.setSelection(mInput.getText().length());
+            // Re-derive against the CURRENT text + caret (the field may have changed
+            // since the chip was built), splicing the token rather than replacing all.
+            String cur = mInput.getText().toString();
+            int caret = mInput.getSelectionStart();
+            mInput.setText(Suggest.apply(cur, caret, item));
+            mInput.setSelection(Suggest.applyCaret(cur, caret, item));
         });
         // Long-press a command chip: its full help page, offline.
         if (HelpStore.has(mActivity, item.label)) {
@@ -369,6 +379,10 @@ public class TerminalView extends BaseView {
                     .replace("\\t", "    ").trim(), OutputFormatter.COL_PLAIN));
             return sb;
         }
+
+        // A `help command:x` reply with no fullhelp must NOT fall into the bare-listing
+        // branch (it would print the response's own keys as if they were commands).
+        if (command.contains("command:")) return null;
 
         // bare help -> aligned "command  description" listing.
         java.util.Iterator<String> keys = resp.keys();

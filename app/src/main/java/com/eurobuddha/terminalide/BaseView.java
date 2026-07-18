@@ -26,4 +26,7 @@ public class BaseView {
     }
 
     public void refreshView(){}
+
+    /** Release resources (e.g. close SQLite handles). Called when the host Activity is destroyed. */
+    public void onDestroy(){}
 }

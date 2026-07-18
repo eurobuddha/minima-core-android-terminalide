@@ -55,6 +55,11 @@ public class LogsView extends BaseView {
         setMainText(fulllogs.toString());
     }
 
+    @Override
+    public void onDestroy() {
+        if (mLogsDB != null) mLogsDB.close();
+    }
+
     public void setMainText(String zText){
         mMainText.post(new Runnable() {
             @Override

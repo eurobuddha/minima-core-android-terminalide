@@ -134,6 +134,11 @@ public class ScriptsView extends BaseView {
         mNode = zNode;
     }
 
+    @Override
+    public void onDestroy() {
+        if (mDB != null) mDB.close();
+    }
+
     /** Browse scripts registered on the node (the `scripts` command) and import them. */
     private void showNodeScripts() {
         if (mNode == null) return;
@@ -152,6 +157,12 @@ public class ScriptsView extends BaseView {
                 String[] addresses = new String[n];
                 for (int i = 0; i < n; i++) {
                     JSONObject s = arr.optJSONObject(i);
+                    if (s == null) {   // malformed element — don't NPE
+                        scripts[i] = "";
+                        addresses[i] = "";
+                        labels[i] = "(unreadable script entry)";
+                        continue;
+                    }
                     scripts[i] = s.optString("script", "");
                     addresses[i] = s.optString("address", "");
                     boolean def = s.optBoolean("default", false);

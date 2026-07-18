@@ -28,7 +28,11 @@ public class LintEngine {
 
     public static List<Lint> lint(String script) {
         List<Lint> out = new ArrayList<>();
-        String noComments = script.replaceAll("(?s)/\\*.*?\\*/", " ");
+        // Blank out comments AND [ ] string literals before keyword/structure checks, so
+        // KISS words inside a string (IF/WHILE/RETURN/@BLKNUM/NUMBER) don't false-positive.
+        String noComments = script
+                .replaceAll("(?s)/\\*.*?\\*/", " ")
+                .replaceAll("\\[[^\\]]*\\]", " ");
 
         // 1. Underscored variable names silently fail at runtime.
         Matcher m = LET_VAR.matcher(noComments);

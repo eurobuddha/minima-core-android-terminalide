@@ -178,6 +178,7 @@ public class ScriptEditorActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (mNode != null) mNode.onDestroy();
+        if (mDB != null) mDB.close();
     }
 
     /** Bundled KISS VM language reference (assets/kissvm.txt). */
@@ -246,7 +247,6 @@ public class ScriptEditorActivity extends AppCompatActivity {
             }
         }
 
-        final int wordStart = start, wordEnd = cur;
         int count = 0;
         for (String[] m : matches) {
             if (count++ >= 20) break;
@@ -263,9 +263,21 @@ public class ScriptEditorActivity extends AppCompatActivity {
             chip.setLayoutParams(lp);
             int pad = (int) (getResources().getDisplayMetrics().density * 6);
             chip.setPadding(pad * 2, pad, pad * 2, pad);
+            final String insert = m[1];
             chip.setOnClickListener(v -> {
-                mEditor.getText().replace(wordStart, wordEnd, m[1]);
-                mEditor.setSelection(wordStart + m[1].length());
+                // Re-derive the word boundaries from the CURRENT caret — the caret may
+                // have moved (a tap doesn't fire the TextWatcher) since chips were built.
+                String t = mEditor.getText().toString();
+                int c = mEditor.getSelectionStart();
+                if (c < 0 || c > t.length()) c = t.length();
+                int s = c;
+                while (s > 0) {
+                    char ch = t.charAt(s - 1);
+                    if (Character.isLetterOrDigit(ch) || ch == '@') s--;
+                    else break;
+                }
+                mEditor.getText().replace(s, c, insert);
+                mEditor.setSelection(s + insert.length());
             });
             mChipRow.addView(chip);
         }
@@ -341,14 +353,21 @@ public class ScriptEditorActivity extends AppCompatActivity {
     private String jsonParam(String key, EditText field, boolean array) {
         String raw = field.getText().toString().trim();
         if (raw.isEmpty()) return "";
-        // Re-serialize minified: spaces inside the JSON would break the node's
-        // command-line tokenizer.
+        String minified;
         try {
-            String minified = array ? new JSONArray(raw).toString() : new JSONObject(raw).toString();
-            return " " + key + ":" + minified;
+            minified = array ? new JSONArray(raw).toString() : new JSONObject(raw).toString();
         } catch (JSONException e) {
             throw new IllegalArgumentException(key + " is not valid JSON: " + e.getMessage());
         }
+        // Minifying only strips whitespace BETWEEN tokens — spaces (and ';') INSIDE a JSON
+        // string value survive and would break the node's space-delimited tokenizer, or
+        // worse, a ';' would start a second command. These fields hold hex/number values,
+        // so reject any that can't ride the command line safely.
+        if (minified.contains(" ") || minified.contains(";")) {
+            throw new IllegalArgumentException(key + " values can't contain spaces or ';' "
+                    + "(they'd break the node command line). Use hex/number values.");
+        }
+        return " " + key + ":" + minified;
     }
 
     private void check() {
