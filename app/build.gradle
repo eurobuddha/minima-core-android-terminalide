@@ -20,6 +20,10 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Sign release with the debug keystore, matching the minima-core-android node app.
+            // IPC is authorized by the MINIMA_ID token, not by signature, so this is sufficient
+            // for sideloading. Swap to a dedicated release keystore if uploading to Play.
+            signingConfig signingConfigs.debug
         }
     }
     compileOptions {
