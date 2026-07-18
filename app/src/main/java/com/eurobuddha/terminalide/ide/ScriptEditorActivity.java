@@ -111,7 +111,8 @@ public class ScriptEditorActivity extends AppCompatActivity {
     }
 
     private void save() {
-        if (mScriptId < 0) return;
+        // mName is null when onCreate bailed out (missing script) — onPause still fires.
+        if (mScriptId < 0 || mName == null) return;
         String name = mName.getText().toString().trim();
         if (name.isEmpty()) name = "untitled";
         mDB.update(mScriptId, name, mEditor.getText().toString());
@@ -191,16 +192,14 @@ public class ScriptEditorActivity extends AppCompatActivity {
     private String jsonParam(String key, EditText field, boolean array) {
         String raw = field.getText().toString().trim();
         if (raw.isEmpty()) return "";
+        // Re-serialize minified: spaces inside the JSON would break the node's
+        // command-line tokenizer.
         try {
-            if (array) {
-                new JSONArray(raw);
-            } else {
-                new JSONObject(raw);
-            }
+            String minified = array ? new JSONArray(raw).toString() : new JSONObject(raw).toString();
+            return " " + key + ":" + minified;
         } catch (JSONException e) {
             throw new IllegalArgumentException(key + " is not valid JSON: " + e.getMessage());
         }
-        return " " + key + ":" + raw;
     }
 
     private void check() {

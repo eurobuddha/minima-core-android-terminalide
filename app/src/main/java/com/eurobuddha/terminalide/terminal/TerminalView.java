@@ -340,7 +340,6 @@ public class TerminalView extends BaseView {
         TextView tv = new TextView(mActivity);
         tv.setTypeface(Typeface.MONOSPACE);
         tv.setTextSize(13);
-        tv.setTextIsSelectable(true);
         tv.setText(text);
         tv.setPadding(0, 8, 0, 8);
         tv.setOnLongClickListener(v -> {

@@ -146,8 +146,17 @@ public class CommandRegistry {
      * uncatchably and can crash the node). Returns a warning string, or null if safe.
      */
     public static String dangerWarning(String fullCommand) {
-        String cmd = fullCommand.trim();
-        String name = cmd.split("[ ;]")[0];
+        // Check every command in a ; chain, not just the first.
+        for (String part : fullCommand.split(";")) {
+            String w = dangerWarningSingle(part.trim());
+            if (w != null) return w;
+        }
+        return null;
+    }
+
+    private static String dangerWarningSingle(String cmd) {
+        if (cmd.isEmpty()) return null;
+        String name = cmd.split(" ")[0];
         if (name.equals("coins")) {
             boolean bounded = cmd.contains("depth:") || cmd.contains("coinid:") || cmd.contains("relevant:true")
                     || cmd.contains("sendable:true");
