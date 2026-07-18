@@ -14,6 +14,9 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import com.eurobuddha.terminalide.NodeApi;
 import com.eurobuddha.terminalide.R;
@@ -50,6 +53,15 @@ public class ScriptEditorActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_script_editor);
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.editor_root), (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            // Pad for the keyboard too — edge-to-edge otherwise hides the editor's
+            // action row and the field being typed into.
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right,
+                    Math.max(systemBars.bottom, ime.bottom));
+            return insets;
+        });
 
         Toolbar tb = findViewById(R.id.editor_toolbar);
         tb.setTitle("Script Editor");
