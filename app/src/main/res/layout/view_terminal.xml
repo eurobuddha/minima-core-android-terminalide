@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/ide_bg">
+
+    <ScrollView
+        android:id="@+id/terminal_scroller"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/terminal_output"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="bottom" />
+
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/terminal_paramhint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:textSize="12sp"
+        android:typeface="monospace"
+        android:textColor="@color/ide_dim"
+        android:background="@color/ide_bg_light"
+        android:visibility="gone" />
+
+    <HorizontalScrollView
+        android:id="@+id/terminal_chipscroller"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/terminal_chiprow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+
+    </HorizontalScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@color/ide_bg_light"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
+
+        <Button
+            android:id="@+id/terminal_hist_up"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:text="▲"
+            android:textColor="@color/ide_accent" />
+
+        <Button
+            android:id="@+id/terminal_hist_down"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:text="▼"
+            android:textColor="@color/ide_accent" />
+
+        <EditText
+            android:id="@+id/terminal_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:singleLine="true"
+            android:imeOptions="actionDone"
+            android:typeface="monospace"
+            android:textSize="14sp"
+            android:textColor="@color/ide_text"
+            android:textColorHint="@color/ide_dim"
+            android:hint="command…"
+            android:inputType="text|textNoSuggestions" />
+
+        <Button
+            android:id="@+id/terminal_fav"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:text="★"
+            android:textColor="@color/ide_warn" />
+
+        <Button
+            android:id="@+id/terminal_send"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Run" />
+
+    </LinearLayout>
+
+</LinearLayout>

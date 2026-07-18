@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="ide_bg">#011627</color>
+    <color name="ide_bg_light">#0B2942</color>
+    <color name="ide_text">#D6DEEB</color>
+    <color name="ide_dim">#697098</color>
+    <color name="ide_accent">#82AAFF</color>
+    <color name="ide_warn">#F78C6C</color>
+</resources>
