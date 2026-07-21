@@ -36,23 +36,21 @@
         android:background="@color/ide_bg_light"
         android:visibility="gone" />
 
-    <HorizontalScrollView
-        android:id="@+id/terminal_chipscroller"
+    <ScrollView
+        android:id="@+id/terminal_dropdown_scroller"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:scrollbars="none">
+        android:background="@color/ide_bg_light"
+        android:scrollbars="vertical"
+        android:visibility="gone">
 
         <LinearLayout
-            android:id="@+id/terminal_chiprow"
-            android:layout_width="wrap_content"
+            android:id="@+id/terminal_dropdown"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" />
+            android:orientation="vertical" />
 
-    </HorizontalScrollView>
+    </ScrollView>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -85,7 +83,20 @@
             android:textSize="18sp"
             android:textColor="@color/ide_accent" />
 
-        <EditText
+        <TextView
+            android:id="@+id/terminal_tab"
+            android:layout_width="40dp"
+            android:layout_height="48dp"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:text="⇥"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/ide_accent"
+            android:visibility="gone" />
+
+        <com.eurobuddha.terminalide.terminal.CaretEditText
             android:id="@+id/terminal_input"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

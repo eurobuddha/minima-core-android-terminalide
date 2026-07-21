@@ -13,7 +13,6 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -31,9 +30,10 @@ import org.json.JSONObject;
 import java.util.List;
 
 /**
- * Professional terminal: persistent history, autocomplete suggestion chips, colorized
- * output entries with long-press copy, favorites, per-command timing, and guards
- * against known node-killer commands (unbounded coins/history).
+ * Professional terminal: persistent history, tab-driven completion dropdown (only
+ * the chosen command's params/values, with descriptions mined from the node help),
+ * colorized output entries with long-press copy, favorites, per-command timing, and
+ * guards against known node-killer commands (unbounded coins/history).
  */
 public class TerminalView extends BaseView {
 
@@ -41,10 +41,15 @@ public class TerminalView extends BaseView {
 
     ScrollView mScroller;
     LinearLayout mOutput;
-    EditText mInput;
-    LinearLayout mChipRow;
-    HorizontalScrollView mChipScroller;
+    CaretEditText mInput;
+    LinearLayout mDropdown;
+    ScrollView mDropdownScroller;
     TextView mParamHint;
+    TextView mTabKey;
+
+    // Live completion state: the current dropdown items + highlighted row.
+    private List<Suggest.Item> mItems = new java.util.ArrayList<>();
+    private int mSel = 0;
 
     NodeApi mNode;
     HistoryDB mHistory;
@@ -61,9 +66,10 @@ public class TerminalView extends BaseView {
         mScroller = mMainView.findViewById(R.id.terminal_scroller);
         mOutput = mMainView.findViewById(R.id.terminal_output);
         mInput = mMainView.findViewById(R.id.terminal_input);
-        mChipRow = mMainView.findViewById(R.id.terminal_chiprow);
-        mChipScroller = mMainView.findViewById(R.id.terminal_chipscroller);
+        mDropdown = mMainView.findViewById(R.id.terminal_dropdown);
+        mDropdownScroller = mMainView.findViewById(R.id.terminal_dropdown_scroller);
         mParamHint = mMainView.findViewById(R.id.terminal_paramhint);
+        mTabKey = mMainView.findViewById(R.id.terminal_tab);
 
         banner();
 
@@ -82,9 +88,29 @@ public class TerminalView extends BaseView {
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override
             public void afterTextChanged(Editable s) {
-                updateSuggestions(s.toString());
+                updateSuggestions();
             }
         });
+
+        // The dropdown must track the caret, not just the text (tap to move the cursor).
+        mInput.setOnCaretMoved(this::updateSuggestions);
+
+        // Hardware keyboard: Tab accepts the highlighted completion, ↑/↓ move the
+        // highlight while the dropdown is open.
+        mInput.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_TAB) {
+                return acceptSelected();
+            }
+            if (!mItems.isEmpty()) {
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) { moveSelection(1); return true; }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_UP)   { moveSelection(-1); return true; }
+            }
+            return false;
+        });
+
+        // On-screen Tab key for the soft keyboard.
+        mTabKey.setOnClickListener(v -> acceptSelected());
 
         Button run = mMainView.findViewById(R.id.terminal_send);
         run.setOnClickListener(v -> submit());
@@ -99,7 +125,7 @@ public class TerminalView extends BaseView {
         fav.setOnClickListener(v -> showFavoritesDialog());
         fav.setOnLongClickListener(v -> { saveFavorite(); return true; });
 
-        updateSuggestions("");
+        updateSuggestions();
     }
 
     public void setNodeApi(NodeApi zNode) {
@@ -111,7 +137,7 @@ public class TerminalView extends BaseView {
                 "╔══════════════════════════════╗\n"
               + "║   MINIMA  TERMINAL  IDE      ║\n"
               + "╚══════════════════════════════╝\n"
-              + "Type a command, or tap a suggestion chip.\n"
+              + "Type a command — completions drop down as you type; ⇥ accepts.\n"
               + "▲/▼ = history (long-press ▲ for list) · ★ = favorites (long-press to save)\n"
               + "Long-press any output block to copy it.", OutputFormatter.COL_DIM));
     }
@@ -217,14 +243,15 @@ public class TerminalView extends BaseView {
                 .show();
     }
 
-    // ---------------- suggestions ----------------
+    // ---------------- completion dropdown ----------------
 
-    private static final int MAX_CHIPS = 30;
+    private static final int MAX_ROWS = 40;      // hard cap on dropdown entries
+    private static final int VISIBLE_DP = 234;   // ~6.5 rows before it scrolls
 
-    private void updateSuggestions(String text) {
-        mChipRow.removeAllViews();
+    private void updateSuggestions() {
+        String text = mInput.getText().toString();
         int caret = mInput.getSelectionStart();
-        Suggest.Result res = Suggest.suggest(text, caret);
+        Suggest.Result res = Suggest.suggest(mActivity, text, caret);
 
         if (res.paramHint != null) {
             mParamHint.setText(res.paramHint + "   (tap for help)");
@@ -235,44 +262,99 @@ public class TerminalView extends BaseView {
             mParamHint.setVisibility(View.GONE);
         }
 
-        int count = 0;
-        for (Suggest.Item item : res.items) {
-            if (count++ >= MAX_CHIPS) break;
-            addChip(item);
-        }
-        mChipScroller.setVisibility(mChipRow.getChildCount() > 0 ? View.VISIBLE : View.GONE);
-        mChipScroller.scrollTo(0, 0);
+        mItems = res.items.size() > MAX_ROWS ? res.items.subList(0, MAX_ROWS) : res.items;
+        mSel = 0;
+        renderDropdown();
     }
 
-    private void addChip(Suggest.Item item) {
-        TextView chip = new TextView(mActivity);
-        chip.setText(item.label);
-        chip.setTypeface(Typeface.MONOSPACE);
-        chip.setTextSize(13);
-        chip.setTextColor(OutputFormatter.COL_CMD);
-        chip.setBackgroundResource(R.drawable.chip_bg);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 12, 0);
-        chip.setLayoutParams(lp);
-        int pad = (int) (mActivity.getResources().getDisplayMetrics().density * 6);
-        chip.setPadding(pad * 2, pad, pad * 2, pad);
-        chip.setOnClickListener(v -> {
-            // Re-derive against the CURRENT text + caret (the field may have changed
-            // since the chip was built), splicing the token rather than replacing all.
-            String cur = mInput.getText().toString();
-            int caret = mInput.getSelectionStart();
-            mInput.setText(Suggest.apply(cur, caret, item));
-            mInput.setSelection(Suggest.applyCaret(cur, caret, item));
-        });
-        // Long-press a command chip: its full help page, offline.
-        if (HelpStore.has(mActivity, item.label)) {
-            chip.setOnLongClickListener(v -> {
-                showHelpDialog(item.label);
-                return true;
-            });
+    private void renderDropdown() {
+        mDropdown.removeAllViews();
+        if (mItems.isEmpty()) {
+            mDropdownScroller.setVisibility(View.GONE);
+            mTabKey.setVisibility(View.GONE);
+            return;
         }
-        mChipRow.addView(chip);
+        float density = mActivity.getResources().getDisplayMetrics().density;
+        int padH = (int) (density * 12);
+        int padV = (int) (density * 8);
+
+        for (int i = 0; i < mItems.size(); i++) {
+            final Suggest.Item item = mItems.get(i);
+            TextView row = new TextView(mActivity);
+            row.setTypeface(Typeface.MONOSPACE);
+            row.setTextSize(13);
+            row.setSingleLine(true);
+            row.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            row.setPadding(padH, padV, padH, padV);
+            row.setText(rowText(item));
+            row.setBackgroundColor(i == mSel ? 0x3382AAFF : 0x00000000);
+            row.setOnClickListener(v -> accept(item));
+            // Long-press a command row: its full help page, offline.
+            if (item.kind == Suggest.KIND_COMMAND || HelpStore.has(mActivity, item.label)) {
+                row.setOnLongClickListener(v -> {
+                    showHelpDialog(item.label);
+                    return true;
+                });
+            }
+            mDropdown.addView(row);
+        }
+
+        // Cap the dropdown height; past ~6.5 rows it scrolls.
+        ViewGroup.LayoutParams lp = mDropdownScroller.getLayoutParams();
+        int cap = (int) (density * VISIBLE_DP);
+        lp.height = mItems.size() > 6 ? cap : ViewGroup.LayoutParams.WRAP_CONTENT;
+        mDropdownScroller.setLayoutParams(lp);
+        mDropdownScroller.setVisibility(View.VISIBLE);
+        mTabKey.setVisibility(View.VISIBLE);
+        scrollSelectedIntoView();
+    }
+
+    /** One dropdown line: completion in blue, required marker, dim description. */
+    private CharSequence rowText(Suggest.Item item) {
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        sb.append(OutputFormatter.colored(item.label, OutputFormatter.COL_CMD));
+        if (item.required) {
+            sb.append(OutputFormatter.colored(" required", OutputFormatter.COL_NUMBER));
+        }
+        if (!item.desc.isEmpty()) {
+            sb.append(OutputFormatter.colored("  " + item.desc, OutputFormatter.COL_DIM));
+        }
+        return sb;
+    }
+
+    private void moveSelection(int direction) {
+        if (mItems.isEmpty()) return;
+        mSel = (mSel + direction + mItems.size()) % mItems.size();
+        renderDropdown();
+    }
+
+    private void scrollSelectedIntoView() {
+        if (mSel < 0 || mSel >= mDropdown.getChildCount()) return;
+        final View row = mDropdown.getChildAt(mSel);
+        mDropdownScroller.post(() -> {
+            int top = row.getTop();
+            int bottom = row.getBottom();
+            int visTop = mDropdownScroller.getScrollY();
+            int visBottom = visTop + mDropdownScroller.getHeight();
+            if (top < visTop) mDropdownScroller.smoothScrollTo(0, top);
+            else if (bottom > visBottom) mDropdownScroller.smoothScrollTo(0, bottom - mDropdownScroller.getHeight());
+        });
+    }
+
+    /** Tab: accept the highlighted completion. Returns true if one was applied. */
+    private boolean acceptSelected() {
+        if (mItems.isEmpty()) return false;
+        accept(mItems.get(Math.min(mSel, mItems.size() - 1)));
+        return true;
+    }
+
+    private void accept(Suggest.Item item) {
+        // Re-derive against the CURRENT text + caret (the field may have changed
+        // since the row was built), splicing the token rather than replacing all.
+        String cur = mInput.getText().toString();
+        int caret = mInput.getSelectionStart();
+        mInput.setText(Suggest.apply(cur, caret, item));
+        mInput.setSelection(Suggest.applyCaret(cur, caret, item));
     }
 
     private void showHelpDialog(String command) {
