@@ -1,8 +1,6 @@
 package com.eurobuddha.terminalide.terminal;
 
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Typeface;
 import android.text.Editable;
@@ -11,6 +9,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -32,20 +31,25 @@ import java.util.List;
 /**
  * Professional terminal: persistent history, tab-driven completion dropdown (only
  * the chosen command's params/values, with descriptions mined from the node help),
- * colorized output entries with long-press copy, favorites, per-command timing, and
- * guards against known node-killer commands (unbounded coins/history).
+ * colorized output entries with long-press copy and a drag-select mode, favorites,
+ * per-command timing, and guards against known node-killer commands
+ * (unbounded coins/history).
  */
 public class TerminalView extends BaseView {
 
     private static final int MAX_ENTRIES = 300;
 
-    ScrollView mScroller;
+    SelectionScrollView mScroller;
     LinearLayout mOutput;
     CaretEditText mInput;
     LinearLayout mDropdown;
     ScrollView mDropdownScroller;
     TextView mParamHint;
     TextView mTabKey;
+    LinearLayout mSelBar;
+
+    /** Selection mode: output becomes selectable and the pager stops stealing drags. */
+    private boolean mSelectMode = false;
 
     // Live completion state: the current dropdown items + highlighted row.
     private List<Suggest.Item> mItems = new java.util.ArrayList<>();
@@ -53,6 +57,9 @@ public class TerminalView extends BaseView {
 
     NodeApi mNode;
     HistoryDB mHistory;
+
+    /** Supplied by the host activity: opens the export sheet (it owns the SAF launcher). */
+    private Runnable mExportAction;
 
     // History navigation state: -1 = live input.
     private int mHistPos = -1;
@@ -70,6 +77,11 @@ public class TerminalView extends BaseView {
         mDropdownScroller = mMainView.findViewById(R.id.terminal_dropdown_scroller);
         mParamHint = mMainView.findViewById(R.id.terminal_paramhint);
         mTabKey = mMainView.findViewById(R.id.terminal_tab);
+        mSelBar = mMainView.findViewById(R.id.terminal_selbar);
+
+        mMainView.findViewById(R.id.terminal_sel_copyall).setOnClickListener(v -> copyAll());
+        mMainView.findViewById(R.id.terminal_sel_export).setOnClickListener(v -> requestExport());
+        mMainView.findViewById(R.id.terminal_sel_done).setOnClickListener(v -> setSelectionMode(false));
 
         banner();
 
@@ -132,6 +144,11 @@ public class TerminalView extends BaseView {
         mNode = zNode;
     }
 
+    /** Wired by the host activity — it owns the file-picker launcher. */
+    public void setExportAction(Runnable zExport) {
+        mExportAction = zExport;
+    }
+
     private void banner() {
         appendEntry(OutputFormatter.colored(
                 "╔══════════════════════════════╗\n"
@@ -139,7 +156,9 @@ public class TerminalView extends BaseView {
               + "╚══════════════════════════════╝\n"
               + "Type a command — completions drop down as you type; ⇥ accepts.\n"
               + "▲/▼ = history (long-press ▲ for list) · ★ = favorites (long-press to save)\n"
-              + "Long-press any output block to copy it.", OutputFormatter.COL_DIM));
+              + "Long-press any output block to copy/share it.\n"
+              + "Menu ⋮ → Select & copy for drag-selection, Export session to save the lot.",
+                OutputFormatter.COL_DIM));
     }
 
     public void clearTerminal() {
@@ -487,13 +506,123 @@ public class TerminalView extends BaseView {
         return sb;
     }
 
-    /** Full session text (for sharing/export). */
+    // ---------------- select / copy / export ----------------
+
+    /**
+     * Full session text, plain (colour spans stripped). Only what is still on screen:
+     * the oldest blocks past MAX_ENTRIES have already been dropped.
+     */
     public String exportText() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < mOutput.getChildCount(); i++) {
-            sb.append(((TextView) mOutput.getChildAt(i)).getText()).append("\n\n");
+            sb.append(((TextView) mOutput.getChildAt(i)).getText().toString()).append("\n\n");
         }
         return sb.toString();
+    }
+
+    public boolean isSelectionMode() {
+        return mSelectMode;
+    }
+
+    /**
+     * Turn the output into selectable text. Native selection is unusable in place
+     * otherwise: the hosting ViewPager claims every horizontal drag, so the selection
+     * handles cannot be moved. In this mode the scroller locks the pager out.
+     */
+    public void setSelectionMode(boolean zOn) {
+        mSelectMode = zOn;
+        for (int i = 0; i < mOutput.getChildCount(); i++) {
+            View child = mOutput.getChildAt(i);
+            if (!(child instanceof TextView)) continue;
+            ((TextView) child).setTextIsSelectable(zOn);
+            // setTextIsSelectable(false) also clears longClickable — the block menu
+            // still needs it once selection mode is switched back off.
+            child.setLongClickable(true);
+        }
+        mSelBar.setVisibility(zOn ? View.VISIBLE : View.GONE);
+        mScroller.setLockHorizontal(zOn);
+
+        if (zOn) {
+            // The IME and a focused input fight the long-press; get both out of the way.
+            mInput.clearFocus();
+            InputMethodManager imm = (InputMethodManager)
+                    mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(mInput.getWindowToken(), 0);
+            Toast.makeText(mActivity,
+                    "Long-press any output to select, drag the handles, then Copy",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void copyAll() {
+        SessionExport.copy(mActivity, exportText(), "Minima terminal session");
+    }
+
+    /** Hand off to the activity's export sheet (Save to file / Share / Copy). */
+    public void requestExport() {
+        if (mExportAction != null) mExportAction.run();
+    }
+
+    /** Long-press on one output block: copy or share just that block. */
+    private void showBlockMenu(final TextView block) {
+        final String text = block.getText().toString();
+        final String[] actions = {
+                "Copy this block",
+                "Select text in this block…",
+                "Share this block…",
+                "Copy whole session",
+                "Select & copy mode",
+        };
+        new AlertDialog.Builder(mActivity)
+                .setTitle("Output block")
+                .setItems(actions, (d, which) -> {
+                    switch (which) {
+                        case 0:
+                            SessionExport.copy(mActivity, text, "Minima terminal");
+                            break;
+                        case 1:
+                            showSelectDialog(block.getText());
+                            break;
+                        case 2:
+                            SessionExport.share(mActivity, text,
+                                    SessionExport.timestampedName("minima-output"),
+                                    "Share output");
+                            break;
+                        case 3:
+                            copyAll();
+                            break;
+                        default:
+                            setSelectionMode(true);
+                            break;
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    /**
+     * Fine-grained selection in a dialog — its own window, so the pager can't
+     * interfere with the selection handles at all.
+     */
+    private void showSelectDialog(CharSequence text) {
+        TextView tv = new TextView(mActivity);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextSize(12);
+        tv.setTextColor(OutputFormatter.COL_PLAIN);
+        tv.setTextIsSelectable(true);
+        tv.setText(text);
+        int pad = (int) (mActivity.getResources().getDisplayMetrics().density * 16);
+        ScrollView scroller = new ScrollView(mActivity);
+        scroller.setPadding(pad, pad / 2, pad, pad / 2);
+        scroller.addView(tv);
+        final CharSequence full = text;
+        new AlertDialog.Builder(mActivity)
+                .setTitle("Select & copy")
+                .setView(scroller)
+                .setPositiveButton("Copy all", (d, w) ->
+                        SessionExport.copy(mActivity, full, "Minima terminal"))
+                .setNegativeButton("Close", null)
+                .show();
     }
 
     // ---------------- output ----------------
@@ -507,8 +636,14 @@ public class TerminalView extends BaseView {
         tv.setTextSize(13);
         tv.setText(text);
         tv.setPadding(0, 8, 0, 8);
-        // Native selection: long-press selects, drag handles, Copy/Select-all toolbar.
-        tv.setTextIsSelectable(true);
+        // In select mode the platform handles the long-press (start a selection);
+        // otherwise it opens the explicit copy/share menu for this block.
+        tv.setTextIsSelectable(mSelectMode);
+        tv.setOnLongClickListener(v -> {
+            if (mSelectMode) return false;
+            showBlockMenu(tv);
+            return true;
+        });
         mOutput.addView(tv);
         scrollToBottom();
         return tv;

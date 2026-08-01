@@ -28,6 +28,18 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+        <!-- Terminal session exports shared as attachments (oversized EXTRA_TEXT would
+             blow the Binder transaction limit). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver android:name=".receiver.MinimaNotifyReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="org.minimarex.minimacore.NOTIFY" />
