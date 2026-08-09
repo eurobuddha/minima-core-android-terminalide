@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- allowBackup stays TRUE here on purpose — see res/xml/data_extraction_rules.xml. This app's command
+         history (`terminalide.db`) is stored VERBATIM and can contain seed phrases and vault passwords, so it
+         must never reach a cloud; but the user's own KISS scripts (`scripts.db`) have no export path, so a
+         blanket disable would destroy real work on a new phone. The rules therefore exclude everything from
+         cloud backup and carry scripts.db ONLY over same-user device transfer. -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
