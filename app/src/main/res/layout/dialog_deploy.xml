@@ -10,7 +10,7 @@
         android:id="@+id/deploy_trackall"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:checked="true"
-        android:text="trackall — track ALL coins at this address (off = only coins relevant to you)" />
+        android:checked="false"
+        android:text="trackall — track EVERY coin at this address, from EVERYONE. Identical script text means an identical address for all users: with this on, a standard template or a burn script fills your wallet with strangers\u2019 locked coins. Leave off unless this script is uniquely yours." />
 
 </LinearLayout>

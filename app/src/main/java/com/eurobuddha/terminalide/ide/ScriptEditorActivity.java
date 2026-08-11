@@ -449,7 +449,11 @@ public class ScriptEditorActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle("Deploy script to node")
                 .setMessage("newscript registers this script's address with your node so it "
-                        + "tracks coins locked by it. This does not spend anything.")
+                        + "tracks coins locked by it. This does not spend anything.\n\n"
+                        + "NOTE: everyone who deploys the same script text gets the SAME "
+                        + "address — with trackall on, your wallet shows every coin anyone "
+                        + "ever locks there (this is how test/burn debris ends up in "
+                        + "wallets). Leave trackall off for shared or template scripts.")
                 .setView(v)
                 .setPositiveButton("Deploy", (d, w) -> deploy(flat, trackall.isChecked()))
                 .setNegativeButton("Cancel", null)
