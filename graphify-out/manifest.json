@@ -1,7 +1,7 @@
 {
   "app/build.gradle": {
-    "mtime": 1786439058.784811,
-    "ast_hash": "8308bb3925f0092d7692032b1552fef7",
+    "mtime": 1786471778.95144,
+    "ast_hash": "e8206ba257332d400de3ec584acc48c9",
     "semantic_hash": ""
   },
   "app/src/main/assets/help.json": {
@@ -55,9 +55,9 @@
     "semantic_hash": "0b903a65a5bb80bd855c6d84c487d96a"
   },
   "app/src/main/java/com/eurobuddha/terminalide/ide/ScriptEditorActivity.java": {
-    "mtime": 1784417991.675356,
-    "ast_hash": "26c7f514b5ea0bbc33d000ccfdc57174",
-    "semantic_hash": "26c7f514b5ea0bbc33d000ccfdc57174"
+    "mtime": 1786471778.9451904,
+    "ast_hash": "11dc996ab851931b5cc039081cd34291",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/ide/ScriptsView.java": {
     "mtime": 1784417979.166434,

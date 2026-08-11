@@ -10,7 +10,7 @@ android {
         applicationId "com.eurobuddha.terminalide"
         minSdk 28
         targetSdk 35
-        versionCode 213
+        versionCode 204
         versionName "0.2.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

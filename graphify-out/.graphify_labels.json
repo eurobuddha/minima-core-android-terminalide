@@ -1,7 +1,7 @@
 {
   "0": "TerminalView",
   "1": "ReceiverDB",
-  "2": "NodeApi",
+  "2": "ScriptsView",
   "3": "ScriptEditorActivity",
   "4": "MainActivity",
   "5": "TxnView",
@@ -18,5 +18,13 @@
   "16": "settings.gradle",
   "17": "SelectionScrollView",
   "18": "Terminal IDE",
-  "19": "User instructions — AUTHORITATIVE. These override default behavior and must be followed exactly."
+  "19": "User instructions — AUTHORITATIVE. These override default behavior and must be followed exactly.",
+  "20": "NodeApi",
+  "21": "BaseView",
+  "22": "Bundle",
+  "23": "EditText",
+  "24": "JSONObject",
+  "25": "LinearLayout",
+  "26": "Override",
+  "27": "TextView"
 }
