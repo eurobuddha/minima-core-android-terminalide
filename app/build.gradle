@@ -10,7 +10,10 @@ android {
         applicationId "com.eurobuddha.terminalide"
         minSdk 28
         targetSdk 35
-        versionCode 204
+        // 213, not 204: 0.2.3 shipped as 212, so 204 is a DOWNGRADE — Android refuses to install it
+        // over 0.2.3, and the catalog (correctly at 213) then offers the update forever to anyone
+        // who did get it on. versionCode only ever goes up, independently of versionName.
+        versionCode 213
         versionName "0.2.4"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
