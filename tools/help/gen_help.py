@@ -367,7 +367,8 @@ SUPPLEMENT = {
         'privatekey': (False, "Use with publickey:custom. The 0x private key seed to sign with."),
         'keyuses': (False, "Use with publickey:custom. " + KEYUSES),
     }, 'extra': {
-        'publickey': ["    custom : sign with the privatekey: and keyuses: you supply."],
+        'publickey': ["    auto : sign with your own wallet keys - for transactions with simple inputs.",
+                      "    custom : sign with the privatekey: and keyuses: you supply."],
     }, 'examples': ["txnsign id:multisig publickey:custom privatekey:0x.. keyuses:5"]},
     'txnexport': {'params': {
         'showtxn': (False, "true or false, default false. Include the transaction JSON in the response as\n"
@@ -432,7 +433,7 @@ SUPPLEMENT = {
 
 # Same rule as ParamDocs.java: 'name:' alone, or followed only by a (...) tag such as
 # '(optional)', '(boolean)' or "(optional) default is 'list'".
-HEADER_RE = re.compile(r'^([a-z0-9]+):\s*(\(.*)?$')
+HEADER_RE = re.compile(r'^([a-z0-9]+(?:\|[a-z0-9]+)*):\s*(\(.*)?$')   # 'id|to|publickey:' documents three params
 
 
 def is_optional(m):
@@ -464,8 +465,9 @@ def headers(lines):
     out = {}
     for i, l in enumerate(lines):
         m = HEADER_RE.match(l.strip())
-        if m and m.group(1) not in out:
-            out[m.group(1)] = i
+        if m:
+            for n in m.group(1).split('|'):
+                out.setdefault(n, i)
     return out
 
 
@@ -600,10 +602,8 @@ def make_brief(name, node, reg, page, sup):
     return (' '.join(parts) + ' - ' + desc) if parts else desc
 
 
-def main():
-    node = json.load(open(NODE_JSON))
-    reg = load_registry()
-
+def build_all(node, reg):
+    """{name: {help, fullhelp}} for every node command - also used by the MDS build."""
     # 2. registry must equal the node's accepted params, per command, in order-free terms.
     bad = []
     for name in sorted(set(node) | set(reg)):
@@ -645,7 +645,11 @@ def main():
     if missing:
         print('Still undocumented:\n  ' + '\n  '.join(missing))
         sys.exit(1)
+    return out
 
+
+def main():
+    out = build_all(json.load(open(NODE_JSON)), load_registry())
     with open(OUT, 'w') as f:
         json.dump(dict(sorted(out.items())), f, indent=1, ensure_ascii=False)
         f.write('\n')
