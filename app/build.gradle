@@ -15,8 +15,8 @@ android {
         // which stranded the numbering — the correct code for a 0.2.x release is now BELOW what is
         // already installed, and versionCode can only go up. Going to 0.3.0 clears it: 300 follows
         // the convention and is a real increase over 212.
-        versionCode 300
-        versionName "0.3.0"
+        versionCode 301
+        versionName "0.3.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

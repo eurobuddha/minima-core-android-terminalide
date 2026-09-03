@@ -471,11 +471,19 @@ public class TerminalView extends BaseView {
         if (resp == null) return null;
 
         // help command:x -> title + full help page.
+        // The node's own pages are incomplete (vault never mentions password:/confirm:,
+        // ~20 commands have no page at all), so the bundled page - the node's text
+        // completed from the node source by tools/help/gen_help.py - wins when we have
+        // one; the node's reply is the fallback for a command this build doesn't know.
         String fullhelp = resp.optString("fullhelp", "");
+        String name = resp.optString("command", "");
+        String bundled = HelpStore.full(mActivity, name);
+        String brief = HelpStore.brief(mActivity, name);
+        if (bundled != null) fullhelp = bundled;
+        if (brief == null) brief = resp.optString("help", "");
         if (!fullhelp.isEmpty()) {
             android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
-            sb.append(OutputFormatter.colored(resp.optString("command", "") + "  "
-                    + resp.optString("help", ""), OutputFormatter.COL_KEY));
+            sb.append(OutputFormatter.colored(name + "  " + brief, OutputFormatter.COL_KEY));
             sb.append(OutputFormatter.colored("\n\n" + fullhelp.replace("\\n", "\n")
                     .replace("\\t", "    ").trim(), OutputFormatter.COL_PLAIN));
             return sb;
@@ -501,7 +509,10 @@ public class TerminalView extends BaseView {
             StringBuilder pad = new StringBuilder(n);
             while (pad.length() < width + 2) pad.append(' ');
             sb.append(OutputFormatter.colored(pad.toString(), OutputFormatter.COL_KEY));
-            sb.append(OutputFormatter.colored(resp.optString(n) + "\n", OutputFormatter.COL_PLAIN));
+            // Bundled summary lists every accepted parameter; the node's may not.
+            String line = HelpStore.brief(mActivity, n);
+            if (line == null) line = resp.optString(n);
+            sb.append(OutputFormatter.colored(line + "\n", OutputFormatter.COL_PLAIN));
         }
         return sb;
     }

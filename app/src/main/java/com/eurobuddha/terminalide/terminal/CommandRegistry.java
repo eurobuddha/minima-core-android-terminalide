@@ -7,9 +7,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The node's command registry (minimaCore fork v1.1.2.3) with per-parameter allowed
- * values for full-depth autocomplete. Data lines are extracted from the node source
+ * The node's command registry (minimaCore fork, core/minima-core) with per-parameter
+ * allowed values for full-depth autocomplete. Data lines are extracted from the node source
  * (CommandRunner.ALL_COMMANDS + each command's getValidParams()/help/equals checks).
+ *
+ * The node REJECTS any parameter not in its getValidParams() list, so every line here must
+ * match that list exactly: tools/help/gen_help.py checks this table against a dump of the
+ * node jar (tools/help/node-help.json) and refuses to build help.json on any mismatch.
  *
  * Line format:  name :: param1<v1,v2> param2 param3<true,false>
  * A <...> list means suggestable values (free-form input may still be allowed).
@@ -139,7 +143,7 @@ public class CommandRegistry {
         "txnview :: file data",
         "txnoutput :: id amount address tokenid storestate<true,false>",
         "txnstate :: id port value",
-        "txnsign :: id publickey<auto> txndelete<true,false> txnpostauto<true,false> txnpostburn txnpostmine<true,false> password privatekey keyuses",
+        "txnsign :: id publickey<auto,custom> txndelete<true,false> txnpostauto<true,false> txnpostburn txnpostmine<true,false> password privatekey keyuses",
         "txnpost :: id auto<true,false> burn mine<true,false> txndelete<true,false>",
         "txndelete :: id",
         "txnexport :: id file showtxn<true,false>",

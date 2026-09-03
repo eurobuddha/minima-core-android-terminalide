@@ -79,12 +79,24 @@ public class ParamDocs {
 
     /** One-line description of a command itself (help.json "help", minus the param spam). */
     public static String commandBrief(Context ctx, String command) {
-        String brief = HelpStore.brief(ctx, command);
+        return stripParams(HelpStore.brief(ctx, command));
+    }
+
+    /**
+     * "[id:] (file:) - Export a transaction" -> "Export a transaction". The summary's
+     * parameter list may end in ] (required) or ) (optional); only a leading run of
+     * such groups is stripped, never a " - " inside the prose.
+     */
+    public static String stripParams(String brief) {
         if (brief == null) return "";
-        int i = brief.lastIndexOf(") - ");
-        if (i >= 0) return brief.substring(i + 4).trim();
-        if (brief.startsWith("- ")) return brief.substring(2).trim();
-        return brief.trim();
+        String b = brief.trim();
+        int i = b.indexOf(" - ");
+        if (i < 0) return b.startsWith("- ") ? b.substring(2).trim() : b;
+        String head = b.substring(0, i).trim();
+        if (head.isEmpty()) return b.substring(i + 3).trim();
+        boolean onlyGroups = (head.startsWith("[") || head.startsWith("("))
+                && (head.endsWith("]") || head.endsWith(")"));
+        return onlyGroups ? b.substring(i + 3).trim() : b;
     }
 
     private static boolean isParamOf(CommandRegistry.Cmd cmd, String name) {
