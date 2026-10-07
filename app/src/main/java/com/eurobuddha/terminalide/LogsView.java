@@ -6,7 +6,7 @@ import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.minimarex.minimaapi.MinimaAPILogger;
+import com.eurobuddha.minimaapi.MinimaAPILogger;
 import com.eurobuddha.terminalide.receiver.ReceiverDB;
 
 public class LogsView extends BaseView {

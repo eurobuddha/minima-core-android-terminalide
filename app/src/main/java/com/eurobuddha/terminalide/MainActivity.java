@@ -28,8 +28,8 @@ import com.eurobuddha.terminalide.terminal.TerminalView;
 import com.google.android.material.tabs.TabLayout;
 
 import org.json.JSONObject;
-import org.minimarex.minimaapi.MinimaAPI;
-import org.minimarex.minimaapi.MinimaAPIMessages;
+import com.eurobuddha.minimaapi.MinimaAPI;
+import com.eurobuddha.minimaapi.MinimaAPIMessages;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -95,7 +95,9 @@ public class MainActivity extends AppCompatActivity {
 
         mPairBanner = findViewById(R.id.pair_banner);
         mPairBanner.setOnClickListener(v -> {
-            Intent launch = getPackageManager().getLaunchIntentForPackage("org.minimarex.minimacore");
+            Intent launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.minimacore");
+        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.minimablock");
+        if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.pandamonium");
             if (launch != null) startActivity(launch);
         });
 
