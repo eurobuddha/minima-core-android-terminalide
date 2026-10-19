@@ -38,6 +38,12 @@ import java.util.List;
 public class TerminalView extends BaseView {
 
     private static final int MAX_ENTRIES = 300;
+    private final java.util.concurrent.ThreadPoolExecutor formatter = TerminalOutput.worker();
+    private boolean destroyed;
+    private int generation;
+    private int inFlight;
+    private static final int MAX_DISPLAY_CHARS = 120000;
+    private static final int MAX_RETAINED_CHARS = 8 * 1024 * 1024;
 
     SelectionScrollView mScroller;
     LinearLayout mOutput;
@@ -162,12 +168,17 @@ public class TerminalView extends BaseView {
     }
 
     public void clearTerminal() {
+        generation++;
+        inFlight = 0;
+        formatter.getQueue().clear();
         mOutput.removeAllViews();
         banner();
     }
 
     @Override
     public void onDestroy() {
+        destroyed = true;
+        formatter.shutdownNow();
         if (mHistory != null) mHistory.close();
     }
 
@@ -415,46 +426,72 @@ public class TerminalView extends BaseView {
     }
 
     private void execute(String zCommand) {
+        if (destroyed) return;
+        // Admit before dispatch, so a saturated formatter never loses an accepted result.
+        if (inFlight >= 8) {
+            Toast.makeText(mActivity, "Please wait for pending commands to finish before running another.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        inFlight++;
         mHistory.addHistory(zCommand);
         appendEntry(OutputFormatter.colored("❯ " + zCommand, OutputFormatter.COL_CMD));
 
-        final TextView result = appendEntry(OutputFormatter.colored("… running", OutputFormatter.COL_DIM));
+        final TerminalLabel result = (TerminalLabel) appendEntry("");
+        result.bind(() -> OutputFormatter.colored("… running", OutputFormatter.COL_DIM));
         final long start = System.currentTimeMillis();
+        final int requestGeneration = generation;
 
         mNode.cmd(zCommand, new NodeApi.Cb() {
             @Override
             public void onResult(JSONObject json) {
-                long ms = System.currentTimeMillis() - start;
-                boolean failed = !json.optBoolean("status", true);
-
-                CharSequence rendered = renderHelp(zCommand, json);
-                if (rendered == null) {
-                    String pretty;
-                    try {
-                        pretty = json.toString(2);
-                    } catch (JSONException e) {
-                        pretty = json.toString();
-                    }
-                    // Render embedded multi-line text as real lines, not \n-escaped strings.
-                    pretty = pretty.replace("\\n", "\n").replace("\\t", "    ");
-                    rendered = OutputFormatter.json(pretty, false);
+                if (destroyed || requestGeneration != generation) return;
+                if (result.getParent() != mOutput) { inFlight--; return; }
+                final long ms = System.currentTimeMillis() - start;
+                final boolean failed = !json.optBoolean("status", true);
+                try {
+                    formatter.execute(() -> {
+                        String pretty;
+                        try { pretty = json.toString(2); }
+                        catch (JSONException e) { pretty = json.toString(); }
+                        final TerminalOutput output = new TerminalOutput(pretty);
+                        mActivity.runOnUiThread(() -> {
+                            if (destroyed || requestGeneration != generation) return;
+                            if (result.getParent() != mOutput) { inFlight--; return; }
+                            inFlight--;
+                            // Only small help replies can use the existing help renderer.
+                            CharSequence help = output.shortened ? null : renderHelp(zCommand, json);
+                            final CharSequence raw = new android.text.SpannedString(help == null
+                                    ? OutputFormatter.json(output.preview, false) : help);
+                            result.setFullOutput(help == null ? output.full : null);
+                            result.bind(() -> {
+                                android.text.SpannableStringBuilder display = new android.text.SpannableStringBuilder(
+                                        raw);
+                                if (output.shortened) display.append(OutputFormatter.colored("\n" + "Preview shortened. Export or share this block for the complete result.", OutputFormatter.COL_DIM));
+                                if (failed) display.append(OutputFormatter.colored("\n" + "✖ command failed", OutputFormatter.COL_ERROR));
+                                display.append(OutputFormatter.colored("\n" + ("⏱ " + ms + " ms"), OutputFormatter.COL_DIM));
+                                return display;
+                            });
+                            trimOutput();
+                            scrollToBottom();
+                        });
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException busy) {
+                    inFlight--;
+                    result.bind(() -> OutputFormatter.colored("Output display is busy. This command was already submitted; check its outcome before retrying.", OutputFormatter.COL_ERROR));
                 }
-                result.setText(rendered);
-                if (failed) {
-                    result.append(OutputFormatter.colored("\n✖ command failed", OutputFormatter.COL_ERROR));
-                }
-                result.append(OutputFormatter.colored("\n⏱ " + ms + " ms", OutputFormatter.COL_DIM));
-                scrollToBottom();
             }
 
             @Override
             public void onError(String message) {
+                if (destroyed || requestGeneration != generation) return;
+                if (result.getParent() != mOutput) { inFlight--; return; }
+                inFlight--;
                 if (NodeApi.ERR_NOT_ENABLED.equals(message)) {
-                    result.setText(OutputFormatter.colored(
-                            "✖ This app is not enabled yet.\nOpen Minima Core → Apps and enable Terminal IDE.",
-                            OutputFormatter.COL_ERROR));
+                    result.bind(() -> OutputFormatter.colored("✖ This app is not enabled yet.\nOpen Minima Core → Apps and enable Terminal IDE.", OutputFormatter.COL_ERROR));
                 } else {
-                    result.setText(OutputFormatter.colored("✖ " + message, OutputFormatter.COL_ERROR));
+                    TerminalOutput output = new TerminalOutput("✖ " + message);
+                    result.setFullOutput(output.full);
+                    result.setText(OutputFormatter.colored(output.preview, OutputFormatter.COL_ERROR));
                 }
                 scrollToBottom();
             }
@@ -526,7 +563,7 @@ public class TerminalView extends BaseView {
     public String exportText() {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < mOutput.getChildCount(); i++) {
-            sb.append(((TextView) mOutput.getChildAt(i)).getText().toString()).append("\n\n");
+            sb.append(((TerminalLabel) mOutput.getChildAt(i)).exportText()).append("\n\n");
         }
         return sb.toString();
     }
@@ -576,7 +613,7 @@ public class TerminalView extends BaseView {
 
     /** Long-press on one output block: copy or share just that block. */
     private void showBlockMenu(final TextView block) {
-        final String text = block.getText().toString();
+        final String text = ((TerminalLabel)block).exportText();
         final String[] actions = {
                 "Copy this block",
                 "Select text in this block…",
@@ -642,10 +679,12 @@ public class TerminalView extends BaseView {
         if (mOutput.getChildCount() >= MAX_ENTRIES) {
             mOutput.removeViewAt(0);
         }
-        TextView tv = new TextView(mActivity);
+        TerminalLabel tv = new TerminalLabel(mActivity);
         tv.setTypeface(Typeface.MONOSPACE);
         tv.setTextSize(13);
-        tv.setText(text);
+        TerminalOutput output = new TerminalOutput(text.toString());
+        tv.setText(output.shortened ? output.preview : text);
+        if (output.shortened) tv.setFullOutput(output.full);
         tv.setPadding(0, 8, 0, 8);
         // In select mode the platform handles the long-press (start a selection);
         // otherwise it opens the explicit copy/share menu for this block.
@@ -656,8 +695,23 @@ public class TerminalView extends BaseView {
             return true;
         });
         mOutput.addView(tv);
+        trimOutput();
         scrollToBottom();
         return tv;
+    }
+
+    private void trimOutput() {
+        long displayed = 0, retained = 0;
+        for (int i=0; i<mOutput.getChildCount(); i++) {
+            TerminalLabel label = (TerminalLabel)mOutput.getChildAt(i);
+            displayed += label.length(); retained += label.exportText().length();
+        }
+        // As with MAX_ENTRIES, only old blocks are discarded. Keep the latest full reply.
+        while (mOutput.getChildCount() > 1 && (displayed > MAX_DISPLAY_CHARS || retained > MAX_RETAINED_CHARS)) {
+            TerminalLabel oldest = (TerminalLabel)mOutput.getChildAt(0);
+            displayed -= oldest.length(); retained -= oldest.exportText().length();
+            mOutput.removeViewAt(0);
+        }
     }
 
     private void scrollToBottom() {

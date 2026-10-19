@@ -1,0 +1,25 @@
+Standalone parity checkpoint: Terminal IDE 0.3.3 / code303
+
+Reused Pandamonium TerminalOutput.java, TerminalLabel.java, LogsView.java and
+RecentLogs.java.inc from scripts/pandamonium-sources/terminalide, plus the adapted
+TerminalView execution/retention logic. Resource prefixes and language bindings
+were changed to standalone IDs/text; IPC and existing help, completion, history,
+script editing and transaction tools remain connected through the existing NodeApi.
+Large JSON is formatted on a bounded worker. The screen draws a bounded preview;
+copy/share/export retain the full result. Clear/destroy discard late view updates;
+admission limits pending commands before submission. Logs use a bounded SQLite
+projection on a worker, retaining newest entries without modifying stored records.
+Reused UTXO's ContextCompat receiver registration to resolve an existing lint error;
+corrected existing indentation in the node-app launch fallback.
+
+Reused TerminalOutputTest, TerminalRenderingTest and LogsViewTest, removing only
+integrated language-switch fixtures. 14 tests passed with 0 failures/errors/skips.
+Includes 5 MB responses/log rows, background formatting, admission, clear/destroy,
+malformed rows and repeated Logs-tab selection. Offline signed release succeeded.
+Lint: 0 errors, 102 warnings. Source/diff review found no unresolved issue in this port.
+Actual APK metadata and family certificate verified:
+package: name='com.eurobuddha.terminalide' versionCode='303' versionName='0.3.3' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+Certificate SHA-256: eca1383c9d27683a281fbe6355356267877dc2dd14d963d7cc289ca0700e517f
+Candidate: dist/terminal-ide-0.3.3-candidate.apk
+SHA-256: 76f18c5e661b798f43e662a59ff76091aae1eed9f508832ef9a3134e5742b092
+No device install/publication or live node command. Full review remains in progress.
