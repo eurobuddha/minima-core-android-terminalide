@@ -1,13 +1,13 @@
 {
   "app/build.gradle": {
-    "mtime": 1786471778.95144,
-    "ast_hash": "e8206ba257332d400de3ec584acc48c9",
+    "mtime": 1788452910.133203,
+    "ast_hash": "2e3b4458b03a4a2a2faa4370ba6337de",
     "semantic_hash": ""
   },
   "app/src/main/assets/help.json": {
-    "mtime": 1784413978.4194348,
-    "ast_hash": "54407516e226b035e8f532d907743f11",
-    "semantic_hash": "54407516e226b035e8f532d907743f11"
+    "mtime": 1788465788.088865,
+    "ast_hash": "",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/BaseView.java": {
     "mtime": 1784417897.1127884,
@@ -85,9 +85,9 @@
     "semantic_hash": "f76e24e3ecbf0eadb2f3c5d13f0a8320"
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/CommandRegistry.java": {
-    "mtime": 1784417311.1809008,
-    "ast_hash": "cfe2ca5a44625dad906dcf47fe9ba047",
-    "semantic_hash": "cfe2ca5a44625dad906dcf47fe9ba047"
+    "mtime": 1788452910.1119976,
+    "ast_hash": "961483696c2bee02272bcf8e477f036b",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/HelpStore.java": {
     "mtime": 1784413998.1659706,
@@ -105,9 +105,9 @@
     "semantic_hash": "3f349d4b8ae2f0a75844e88216b337bb"
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/ParamDocs.java": {
-    "mtime": 1784674882.5022166,
-    "ast_hash": "7acfe4f83114ca6a46b1e8ef59d41143",
-    "semantic_hash": "7acfe4f83114ca6a46b1e8ef59d41143"
+    "mtime": 1788452910.1153135,
+    "ast_hash": "c67c9a2ced13f5745f8e2cacefaa325e",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/Suggest.java": {
     "mtime": 1784675301.2151253,
@@ -115,8 +115,8 @@
     "semantic_hash": "7bc71b8dd484a58dbe225ef65ecd85cb"
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/TerminalView.java": {
-    "mtime": 1785580888.3688145,
-    "ast_hash": "47a604f55de78e1e8b2aa5b08cdb510c",
+    "mtime": 1788452910.1222258,
+    "ast_hash": "4d2e88318b2af6dcc2a3813fef509d2f",
     "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/txn/TxnView.java": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "CLAUDE.md": {
-    "mtime": 1784408865.1604366,
-    "ast_hash": "4439d09bc81851d89f9ffcecc4136dcf",
+    "mtime": 1786883617.1221733,
+    "ast_hash": "46e9035553a7ba076e59754595bc542a",
     "semantic_hash": ""
   },
   "README.md": {
@@ -222,6 +222,36 @@
   "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.webp": {
     "mtime": 1784408865.0725074,
     "ast_hash": "9ee591be72fb336861a8044086054daa",
+    "semantic_hash": ""
+  },
+  ".githooks/install.sh": {
+    "mtime": 1786883617.1040092,
+    "ast_hash": "f31b37c6d1b5d340a5623f1715457ea0",
+    "semantic_hash": ""
+  },
+  ".githooks/pre-commit": {
+    "mtime": 1786883617.1004453,
+    "ast_hash": "03526be838d5dd774506cc1f8b47f38c",
+    "semantic_hash": ""
+  },
+  "tools/help/Dump.java": {
+    "mtime": 1788452669.458518,
+    "ast_hash": "7945bbbc1f7505380941d1ee86dddc63",
+    "semantic_hash": ""
+  },
+  "tools/help/gen_help.py": {
+    "mtime": 1788465788.0181744,
+    "ast_hash": "649878849f124604f90be5dfe725e2b5",
+    "semantic_hash": ""
+  },
+  "tools/help/README.md": {
+    "mtime": 1788452928.7183702,
+    "ast_hash": "a6c701c2af67e5561a7e35e81577c1da",
+    "semantic_hash": ""
+  },
+  "tools/help/node-help.json": {
+    "mtime": 1788452669.5369282,
+    "ast_hash": "",
     "semantic_hash": ""
   }
 }

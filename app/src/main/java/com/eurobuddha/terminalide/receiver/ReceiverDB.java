@@ -108,8 +108,9 @@ public class ReceiverDB extends SQLiteOpenHelper {
                 String data = cursor.getString(0);
                 String message;
                 if (cursor.getLong(1) > 65536) {
-                    // A partial JSON document cannot be parsed; show its bounded literal prefix.
-                    message = data + "…";
+                    // A partial JSON document cannot be parsed; show the message's literal prefix
+                    // (TerminalOutput bounds the line and marks the cut with …).
+                    message = data.startsWith("{\"message\":\"") ? data.substring(12) : data;
                 } else {
                     try { message = new JSONObject(data).getString("message"); }
                     catch (org.json.JSONException malformed) { message = data; }
@@ -119,10 +120,12 @@ public class ReceiverDB extends SQLiteOpenHelper {
         }
         for (int i = newest.size() - 1; i >= 0; i--) {
             tail.append(newest.get(i)).append('\n');
+            // Drop whole lines from the front: a line carries txpow ids and addresses, and a
+            // partial one with no marker would read as a shorter identifier. Every message
+            // ends in '\n', so the newest line always survives.
             if (tail.length() > max) {
-                int from = tail.length() - max;
-                if (Character.isLowSurrogate(tail.charAt(from))) from++;
-                tail.delete(0, from);
+                int from = tail.indexOf("\n", tail.length() - max) + 1;
+                if (from > 0 && from < tail.length()) tail.delete(0, from);
             }
         }
         // Preserve the newest 160 lines, rather than clipping away the newest messages.

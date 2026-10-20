@@ -19,8 +19,9 @@ public class TerminalOutputTest {
         assertTrue(out.preview.length() <= TerminalOutput.MAX_CHARS);
         assertTrue(out.preview.split("\n",-1).length <= TerminalOutput.MAX_LINES+1);
     }
-    @Test public void smallResultsAndJsonEscapesRemainLiteral() {
-        String text = "{\"token\":\"Chinese 中文 Russian Русский Ukrainian Українська \\n \\t\"}";
+    @Test public void smallResultsAreNotShortened() {
+        // Embedded \n and \t are unescaped by TerminalView before bounding (see TerminalRenderingTest).
+        String text = "{\"token\":\"Chinese 中文 Russian Русский Ukrainian Українська\"}";
         TerminalOutput out = new TerminalOutput(text);
         assertFalse(out.shortened); assertEquals(text,out.preview); assertSame(text,out.full);
     }

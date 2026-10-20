@@ -16,6 +16,7 @@ public class LogsView extends BaseView {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor worker = TerminalOutput.worker();
     private boolean loading;
+    private boolean dirty;   // a refresh asked for during a load; re-run once it finishes
     private boolean destroyed;
 
     public LogsView(Activity activity) {
@@ -25,14 +26,17 @@ public class LogsView extends BaseView {
     }
 
     @Override public void refreshView() {
-        if (destroyed || loading) return;
+        if (destroyed) return;
+        if (loading) { dirty = true; return; }
         loading = true;
+        dirty = false;
         worker.execute(() -> {
             String snapshot = null;
             try (ReceiverDB db = new ReceiverDB(context)) {
                 snapshot = db.getRecentLogPreview();
             } catch (RuntimeException error) {
                 // Keep database details out of the UI; the user can retry by reopening this tab.
+                android.util.Log.w("LogsView", "log preview failed", error);
             }
             final String result = snapshot;
             main.post(() -> {
@@ -40,6 +44,7 @@ public class LogsView extends BaseView {
                 if (destroyed) return;
                 if (result == null) text.setText("Could not load logs. Reopen this tab to retry.");
                 else text.setText("Recent log preview · long entries are shortened. Stored logs are unchanged." + "\n\n" + result);
+                if (dirty) refreshView();
             });
         });
     }

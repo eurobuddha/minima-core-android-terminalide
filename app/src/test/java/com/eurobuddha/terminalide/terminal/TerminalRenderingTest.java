@@ -32,14 +32,18 @@ public class TerminalRenderingTest {
         doAnswer(i -> {callback=i.getArgument(1); return null;}).when(node).cmd(anyString(),any());
     }
     @After public void close() {terminal.onDestroy();}
-    private void awaitResult() throws Exception {
+    private void awaitResult() throws Exception { awaitResult("end-marker"); }
+    private void awaitResult(String marker) throws Exception {
         long until=System.nanoTime()+10_000_000_000L;
         while (System.nanoTime()<until) {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
-            if (terminal.exportText().contains("end-marker")) return;
+            if (terminal.exportText().contains(marker)) return;
             Thread.sleep(10);
         }
         fail("Background formatter did not complete");
+    }
+    private TextView lastLabel() {
+        return (TextView)terminal.mOutput.getChildAt(terminal.mOutput.getChildCount()-1);
     }
     @Test public void multiMegabyteReplyDrawsSmallPreviewButExportsCompleteJson() throws Exception {
         terminal.runCMD("balance");
@@ -54,13 +58,57 @@ public class TerminalRenderingTest {
         assertTrue(label.length()<14000);
         verify(node,times(1)).cmd(eq("balance"),any());
     }
-    @Test public void clearingTerminalDiscardsLateResultsWithoutRerunningTheCommand() throws Exception {
+    @Test public void clearingTerminalRendersLateResultsIntoAFreshBlockWithoutRerunningTheCommand() throws Exception {
         terminal.runCMD("balance"); terminal.clearTerminal();
-        callback.onResult(new JSONObject().put("status",true).put("marker","end-marker"));
-        Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertEquals(1,terminal.mOutput.getChildCount());
-        assertFalse(terminal.exportText().contains("end-marker"));
+        callback.onResult(new JSONObject().put("status",true).put("marker","end-marker"));
+        awaitResult();
+        // banner + late echo + result: the txpowid of a slow send is never silently dropped.
+        assertEquals(3,terminal.mOutput.getChildCount());
+        assertTrue(terminal.exportText().contains("❯ balance  (reply arrived after"));
         verify(node,times(1)).cmd(eq("balance"),any());
+        // The late reply also released its admission slot.
+        for(int i=0;i<8;i++) terminal.runCMD("status");
+        verify(node,times(8)).cmd(eq("status"),any());
+    }
+    @Test public void helpPageRendersFormattedEvenWhenItsJsonExceedsTheLineBound() throws Exception {
+        StringBuilder fullhelp = new StringBuilder();
+        for (int i=0; fullhelp.length()<2500; i++) fullhelp.append("send amount:1 address:0xFF.. line ").append(i).append('\n');
+        JSONObject reply = new JSONObject().put("status",true).put("response", new JSONObject()
+                .put("command","send").put("help","Send Minima or tokens").put("fullhelp",fullhelp.toString()));
+        terminal.runCMD("help command:send"); callback.onResult(reply); awaitResult("⏱");
+        String shown = lastLabel().getText().toString();
+        assertFalse(shown.contains("fullhelp"));
+        assertFalse(shown.contains("Preview shortened"));
+        assertTrue(shown.startsWith("send  "));
+        assertEquals(shown, ((TerminalLabel)lastLabel()).exportText());
+    }
+    @Test public void embeddedNewlinesRenderAsRealLines() throws Exception {
+        terminal.runCMD("scripts");
+        callback.onResult(new JSONObject().put("status",true).put("script","LET a=1\nLET b=2\tend-marker"));
+        awaitResult();
+        String shown = lastLabel().getText().toString();
+        assertTrue(shown.contains("LET a=1\nLET b=2    end-marker"));
+        assertFalse(shown.contains("\\n"));
+    }
+    @Test public void oversizedCommandIsRefusedBeforeAdmissionOrDispatch() {
+        terminal.runCMD("a".repeat(256_001));
+        verify(node,never()).cmd(anyString(),any());
+        assertTrue(terminal.exportText().contains("✖ Command is 256001 chars; the node accepts at most 256000."));
+        // No in-flight slot was taken: all eight admissions remain.
+        for(int i=0;i<8;i++) terminal.runCMD("status");
+        verify(node,times(8)).cmd(eq("status"),any());
+    }
+    @Test public void longCommandEchoKeepsColourAndSaysItIsShortened() {
+        terminal.runCMD("txnimport data:" + "f".repeat(2000));
+        TextView echo=(TextView)terminal.mOutput.getChildAt(1);
+        android.text.Spanned text=(android.text.Spanned)echo.getText();
+        assertTrue(text.toString().contains("Preview shortened"));
+        android.text.style.ForegroundColorSpan[] spans=text.getSpans(0,1,android.text.style.ForegroundColorSpan.class);
+        assertEquals(OutputFormatter.COL_CMD,spans[0].getForegroundColor());
+        assertTrue(((TerminalLabel)echo).exportText().contains("f".repeat(2000)));
+        callback.onError("boom " + "e".repeat(2000));
+        assertTrue(lastLabel().getText().toString().contains("Preview shortened"));
     }
     @Test public void commandAdmissionStopsBeforeDispatchAndResumesAfterAReply() {
         for(int i=0;i<9;i++) terminal.runCMD("status");

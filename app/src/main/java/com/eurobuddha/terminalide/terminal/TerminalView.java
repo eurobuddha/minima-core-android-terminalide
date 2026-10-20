@@ -40,10 +40,17 @@ public class TerminalView extends BaseView {
     private static final int MAX_ENTRIES = 300;
     private final java.util.concurrent.ThreadPoolExecutor formatter = TerminalOutput.worker();
     private boolean destroyed;
-    private int generation;
     private int inFlight;
     private static final int MAX_DISPLAY_CHARS = 120000;
     private static final int MAX_RETAINED_CHARS = 8 * 1024 * 1024;
+    /** Past this the select dialog shows the preview; "Copy all" is still the full text. Aligned
+     *  with SessionExport.MAX_INLINE_BYTES: a selectable TextView lays out every line synchronously
+     *  on the UI thread, and nothing larger can be copied whole from the dialog anyway. */
+    private static final int MAX_SELECT_CHARS = 256 * 1024;
+    // == MinimaReceiver.MAX_MESSAGE_LEN (apks/base/app/src/main/java/com/eurobuddha/minimacore/receiver/MinimaReceiver.java).
+    // Above the ~1 MB Binder cap sendBroadcast throws in the caller; below it the node still rejects the command.
+    private static final int MAX_COMMAND_CHARS = 256_000;
+    private static final String SHORTENED_NOTICE = "\nPreview shortened. Export or share this block for the complete result.";
 
     SelectionScrollView mScroller;
     LinearLayout mOutput;
@@ -156,7 +163,7 @@ public class TerminalView extends BaseView {
     }
 
     private void banner() {
-        appendEntry(OutputFormatter.colored(
+        appendEntry(
                 "╔══════════════════════════════╗\n"
               + "║   MINIMA  TERMINAL  IDE      ║\n"
               + "╚══════════════════════════════╝\n"
@@ -164,13 +171,11 @@ public class TerminalView extends BaseView {
               + "▲/▼ = history (long-press ▲ for list) · ★ = favorites (long-press to save)\n"
               + "Long-press any output block to copy/share it.\n"
               + "Menu ⋮ → Select & copy for drag-selection, Export session to save the lot.",
-                OutputFormatter.COL_DIM));
+                OutputFormatter.COL_DIM);
     }
 
+    /** Pending replies are not lost: they render into fresh blocks (see replyTarget). */
     public void clearTerminal() {
-        generation++;
-        inFlight = 0;
-        formatter.getQueue().clear();
         mOutput.removeAllViews();
         banner();
     }
@@ -427,6 +432,10 @@ public class TerminalView extends BaseView {
 
     private void execute(String zCommand) {
         if (destroyed) return;
+        if (zCommand.length() > MAX_COMMAND_CHARS) {
+            appendEntry("✖ Command is " + zCommand.length() + " chars; the node accepts at most " + MAX_COMMAND_CHARS + ".", OutputFormatter.COL_ERROR);
+            return;
+        }
         // Admit before dispatch, so a saturated formatter never loses an accepted result.
         if (inFlight >= 8) {
             Toast.makeText(mActivity, "Please wait for pending commands to finish before running another.", Toast.LENGTH_SHORT).show();
@@ -434,18 +443,16 @@ public class TerminalView extends BaseView {
         }
         inFlight++;
         mHistory.addHistory(zCommand);
-        appendEntry(OutputFormatter.colored("❯ " + zCommand, OutputFormatter.COL_CMD));
+        appendEntry("❯ " + zCommand, OutputFormatter.COL_CMD);
 
-        final TerminalLabel result = (TerminalLabel) appendEntry("");
+        final TerminalLabel result = appendEntry("", OutputFormatter.COL_PLAIN);
         result.bind(() -> OutputFormatter.colored("… running", OutputFormatter.COL_DIM));
         final long start = System.currentTimeMillis();
-        final int requestGeneration = generation;
 
         mNode.cmd(zCommand, new NodeApi.Cb() {
             @Override
             public void onResult(JSONObject json) {
-                if (destroyed || requestGeneration != generation) return;
-                if (result.getParent() != mOutput) { inFlight--; return; }
+                if (destroyed) return;
                 final long ms = System.currentTimeMillis() - start;
                 final boolean failed = !json.optBoolean("status", true);
                 try {
@@ -453,20 +460,24 @@ public class TerminalView extends BaseView {
                         String pretty;
                         try { pretty = json.toString(2); }
                         catch (JSONException e) { pretty = json.toString(); }
-                        final TerminalOutput output = new TerminalOutput(pretty);
+                        // Render embedded multi-line text as real lines, not \n-escaped strings.
+                        pretty = pretty.replace("\\n", "\n").replace("\\t", "    ");
+                        // Help first, bound second: a help page is small multi-line text, whereas
+                        // its JSON is one long line that the bound would cut mid-page.
+                        final CharSequence help = renderHelp(zCommand, json);
+                        final TerminalOutput output = new TerminalOutput(help != null ? help.toString() : pretty);
                         mActivity.runOnUiThread(() -> {
-                            if (destroyed || requestGeneration != generation) return;
-                            if (result.getParent() != mOutput) { inFlight--; return; }
+                            if (destroyed) return;
+                            final TerminalLabel target = replyTarget(result, zCommand);
                             inFlight--;
-                            // Only small help replies can use the existing help renderer.
-                            CharSequence help = output.shortened ? null : renderHelp(zCommand, json);
-                            final CharSequence raw = new android.text.SpannedString(help == null
-                                    ? OutputFormatter.json(output.preview, false) : help);
-                            result.setFullOutput(help == null ? output.full : null);
-                            result.bind(() -> {
+                            final boolean page = help != null && !output.shortened;
+                            final CharSequence raw = new android.text.SpannedString(page ? help
+                                    : OutputFormatter.json(output.preview, false));
+                            target.setFullOutput(page ? null : output.full);
+                            target.bind(() -> {
                                 android.text.SpannableStringBuilder display = new android.text.SpannableStringBuilder(
                                         raw);
-                                if (output.shortened) display.append(OutputFormatter.colored("\n" + "Preview shortened. Export or share this block for the complete result.", OutputFormatter.COL_DIM));
+                                if (output.shortened) display.append(OutputFormatter.colored(SHORTENED_NOTICE, OutputFormatter.COL_DIM));
                                 if (failed) display.append(OutputFormatter.colored("\n" + "✖ command failed", OutputFormatter.COL_ERROR));
                                 display.append(OutputFormatter.colored("\n" + ("⏱ " + ms + " ms"), OutputFormatter.COL_DIM));
                                 return display;
@@ -477,25 +488,33 @@ public class TerminalView extends BaseView {
                     });
                 } catch (java.util.concurrent.RejectedExecutionException busy) {
                     inFlight--;
-                    result.bind(() -> OutputFormatter.colored("Output display is busy. This command was already submitted; check its outcome before retrying.", OutputFormatter.COL_ERROR));
+                    replyTarget(result, zCommand).bind(() -> OutputFormatter.colored("Output display is busy. This command was already submitted; check its outcome before retrying.", OutputFormatter.COL_ERROR));
                 }
             }
 
             @Override
             public void onError(String message) {
-                if (destroyed || requestGeneration != generation) return;
-                if (result.getParent() != mOutput) { inFlight--; return; }
+                if (destroyed) return;
+                final TerminalLabel target = replyTarget(result, zCommand);
                 inFlight--;
                 if (NodeApi.ERR_NOT_ENABLED.equals(message)) {
-                    result.bind(() -> OutputFormatter.colored("✖ This app is not enabled yet.\nOpen Minima Core → Apps and enable Terminal IDE.", OutputFormatter.COL_ERROR));
+                    target.bind(() -> OutputFormatter.colored("✖ This app is not enabled yet.\nOpen Minima Core → Apps and enable Terminal IDE.", OutputFormatter.COL_ERROR));
                 } else {
-                    TerminalOutput output = new TerminalOutput("✖ " + message);
-                    result.setFullOutput(output.full);
-                    result.setText(OutputFormatter.colored(output.preview, OutputFormatter.COL_ERROR));
+                    target.setText(preview(target, "✖ " + message, OutputFormatter.COL_ERROR));
                 }
                 scrollToBottom();
             }
         });
+    }
+
+    /**
+     * The block a reply renders into: its own, or a fresh one when trimOutput() or
+     * "Clear terminal" evicted it. A late reply (the txpowid of a slow send) is never dropped.
+     */
+    private TerminalLabel replyTarget(TerminalLabel result, String zCommand) {
+        if (result.getParent() == mOutput) return result;
+        appendEntry("❯ " + zCommand + "  (reply arrived after the block was trimmed or cleared)", OutputFormatter.COL_CMD);
+        return appendEntry("", OutputFormatter.COL_PLAIN);
     }
 
     /**
@@ -629,7 +648,9 @@ public class TerminalView extends BaseView {
                             SessionExport.copy(mActivity, text, "Minima terminal");
                             break;
                         case 1:
-                            showSelectDialog(block.getText());
+                            // Select from the full text; only a multi-MB block falls back to the
+                            // preview for selection (a TextView cannot lay that out), never for Copy all.
+                            showSelectDialog(text.length() > MAX_SELECT_CHARS ? block.getText() : text, text);
                             break;
                         case 2:
                             SessionExport.share(mActivity, text,
@@ -652,7 +673,7 @@ public class TerminalView extends BaseView {
      * Fine-grained selection in a dialog — its own window, so the pager can't
      * interfere with the selection handles at all.
      */
-    private void showSelectDialog(CharSequence text) {
+    private void showSelectDialog(CharSequence text, final String full) {
         TextView tv = new TextView(mActivity);
         tv.setTypeface(Typeface.MONOSPACE);
         tv.setTextSize(12);
@@ -663,7 +684,6 @@ public class TerminalView extends BaseView {
         ScrollView scroller = new ScrollView(mActivity);
         scroller.setPadding(pad, pad / 2, pad, pad / 2);
         scroller.addView(tv);
-        final CharSequence full = text;
         new AlertDialog.Builder(mActivity)
                 .setTitle("Select & copy")
                 .setView(scroller)
@@ -675,16 +695,24 @@ public class TerminalView extends BaseView {
 
     // ---------------- output ----------------
 
-    private TextView appendEntry(CharSequence text) {
+    /** Bounded preview in one colour, with the notice when it is cut; the full text stays exportable. */
+    private static CharSequence preview(TerminalLabel label, String text, int color) {
+        TerminalOutput output = new TerminalOutput(text);
+        label.setFullOutput(output.shortened ? output.full : null);
+        android.text.SpannableStringBuilder display = new android.text.SpannableStringBuilder(
+                OutputFormatter.colored(output.preview, color));
+        if (output.shortened) display.append(OutputFormatter.colored(SHORTENED_NOTICE, OutputFormatter.COL_DIM));
+        return display;
+    }
+
+    private TerminalLabel appendEntry(String text, int color) {
         if (mOutput.getChildCount() >= MAX_ENTRIES) {
             mOutput.removeViewAt(0);
         }
         TerminalLabel tv = new TerminalLabel(mActivity);
         tv.setTypeface(Typeface.MONOSPACE);
         tv.setTextSize(13);
-        TerminalOutput output = new TerminalOutput(text.toString());
-        tv.setText(output.shortened ? output.preview : text);
-        if (output.shortened) tv.setFullOutput(output.full);
+        tv.setText(preview(tv, text, color));
         tv.setPadding(0, 8, 0, 8);
         // In select mode the platform handles the long-press (start a selection);
         // otherwise it opens the explicit copy/share menu for this block.
@@ -704,12 +732,12 @@ public class TerminalView extends BaseView {
         long displayed = 0, retained = 0;
         for (int i=0; i<mOutput.getChildCount(); i++) {
             TerminalLabel label = (TerminalLabel)mOutput.getChildAt(i);
-            displayed += label.length(); retained += label.exportText().length();
+            displayed += label.length(); retained += label.exportLength();
         }
         // As with MAX_ENTRIES, only old blocks are discarded. Keep the latest full reply.
         while (mOutput.getChildCount() > 1 && (displayed > MAX_DISPLAY_CHARS || retained > MAX_RETAINED_CHARS)) {
             TerminalLabel oldest = (TerminalLabel)mOutput.getChildAt(0);
-            displayed -= oldest.length(); retained -= oldest.exportText().length();
+            displayed -= oldest.length(); retained -= oldest.exportLength();
             mOutput.removeViewAt(0);
         }
     }

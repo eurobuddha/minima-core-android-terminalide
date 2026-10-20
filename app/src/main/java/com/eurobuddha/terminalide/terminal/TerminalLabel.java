@@ -14,6 +14,8 @@ public final class TerminalLabel extends androidx.appcompat.widget.AppCompatText
     private String fullOutput;
     public void setFullOutput(String value) { fullOutput = value; }
     public String exportText() { return fullOutput == null ? getText().toString() : fullOutput; }
+    /** exportText().length() without building the string on every append. */
+    public int exportLength() { return fullOutput == null ? length() : fullOutput.length(); }
     public TerminalLabel(Context context) { super(context); }
     public void bind(Supplier<CharSequence> value) { display = value; refreshDisplay(); }
     public void refreshDisplay() {
@@ -41,12 +43,5 @@ public final class TerminalLabel extends androidx.appcompat.widget.AppCompatText
     }
     @Override protected void onConfigurationChanged(Configuration config) {
         super.onConfigurationChanged(config); refreshDisplay();
-    }
-    public static void refreshTree(android.view.View view) {
-        if (view instanceof TerminalLabel) ((TerminalLabel)view).refreshDisplay();
-        if (view instanceof android.view.ViewGroup) {
-            android.view.ViewGroup group = (android.view.ViewGroup)view;
-            for (int i=0;i<group.getChildCount();i++) refreshTree(group.getChildAt(i));
-        }
     }
 }

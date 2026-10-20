@@ -1,6 +1,7 @@
 package com.eurobuddha.terminalide.terminal;
 
-/** A bounded display preview; the complete, escaped JSON remains available for export. */
+/** A bounded display preview; the complete text (with embedded \n/\t already rendered as real
+ *  lines, so not necessarily re-parseable JSON) remains available for export. */
 public final class TerminalOutput {
     public static final int MAX_CHARS = 12000;
     public static final int MAX_LINE = 512;

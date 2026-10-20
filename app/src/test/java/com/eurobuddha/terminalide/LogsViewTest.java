@@ -64,6 +64,16 @@ public class LogsViewTest {
         assertTrue(preview.endsWith("newest-marker\n"));
         assertTrue(preview.contains("broken json"));
     }
+    @Test public void charBudgetDropsWholeLinesSoNoIdentifierIsCutWithoutAMarker() throws Exception {
+        // 30 single-line 10 000-char messages: each previews to 513 chars, together past MAX_CHARS.
+        for (int i=0;i<30;i++) log("msg-"+i+"-"+"a".repeat(10000));
+        String preview = db.getRecentLogPreview();
+        assertTrue(preview.length()<=TerminalOutput.MAX_CHARS);
+        assertTrue(preview.startsWith("msg-"));
+        for (String line : preview.split("\n")) { assertTrue(line, line.startsWith("msg-")); assertTrue(line.endsWith("…")); }
+        assertTrue(preview.endsWith("…\n"));
+        assertTrue(preview.contains("msg-29-"));
+    }
     @Test public void logsTabLoadsLargeHistoryAsynchronouslyAndSurvivesRepeatedSelection() throws Exception {
         log("a".repeat(5*1024*1024)); log("newest-marker");
         TextView text=createView();
