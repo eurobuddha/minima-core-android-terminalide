@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import com.eurobuddha.terminalide.receiver.ReceiverDB;
 import com.eurobuddha.terminalide.terminal.TerminalOutput;
@@ -12,6 +14,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 /** A background-loaded, bounded preview of the persisted node logs. */
 public class LogsView extends BaseView {
     private final TextView text;
+    private final ScrollView scroller;
     private final Context context;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor worker = TerminalOutput.worker();
@@ -23,6 +26,7 @@ public class LogsView extends BaseView {
         super(activity, R.layout.view_logs);
         context = activity.getApplicationContext();
         text = getMainView().findViewById(R.id.logs_maintext);
+        scroller = getMainView().findViewById(R.id.terminal_scroller);
     }
 
     @Override public void refreshView() {
@@ -43,7 +47,10 @@ public class LogsView extends BaseView {
                 loading = false;
                 if (destroyed) return;
                 if (result == null) text.setText("Could not load logs. Reopen this tab to retry.");
-                else text.setText("Recent log preview · long entries are shortened. Stored logs are unchanged." + "\n\n" + result);
+                else text.setText(result);   // the one-line hint lives in the layout (logs_hint)
+                // Newest entries are at the end: open at the bottom, like the terminal tab does
+                // for fresh output (posted so it runs after the new text has been laid out).
+                scroller.post(() -> scroller.fullScroll(View.FOCUS_DOWN));
                 if (dirty) refreshView();
             });
         });

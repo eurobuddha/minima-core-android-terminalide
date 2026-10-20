@@ -1,14 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
        android:layout_width="match_parent"
-       android:layout_height="wrap_content"
+       android:layout_height="match_parent"
        android:orientation="vertical"
        android:background="@color/ide_bg">
+
+   <!-- One short, small hint line: keeps the log body itself for the (small) screen. -->
+   <TextView
+       android:id="@+id/logs_hint"
+       android:layout_width="match_parent"
+       android:layout_height="wrap_content"
+       android:paddingStart="8dp"
+       android:paddingEnd="8dp"
+       android:paddingTop="4dp"
+       android:textSize="10sp"
+       android:textColor="@color/ide_dim"
+       android:text="Recent logs · newest at the bottom · long entries shortened" />
 
    <ScrollView
        android:id="@+id/terminal_scroller"
        android:layout_width="match_parent"
-       android:layout_height="match_parent"
+       android:layout_height="0dp"
+       android:layout_weight="1"
        android:padding="8dp">
 
       <TextView

@@ -167,10 +167,9 @@ public class TerminalView extends BaseView {
                 "╔══════════════════════════════╗\n"
               + "║   MINIMA  TERMINAL  IDE      ║\n"
               + "╚══════════════════════════════╝\n"
-              + "Type a command — completions drop down as you type; ⇥ accepts.\n"
-              + "▲/▼ = history (long-press ▲ for list) · ★ = favorites (long-press to save)\n"
-              + "Long-press any output block to copy/share it.\n"
-              + "Menu ⋮ → Select & copy for drag-selection, Export session to save the lot.",
+              // Two short lines: this has to fit a phone's outer screen without burying the prompt.
+              + "Type a command · ⇥ accepts a completion\n"
+              + "▲▼ history · ★ favorites · long-press output to copy · ⋮ export",
                 OutputFormatter.COL_DIM);
     }
 
@@ -322,7 +321,7 @@ public class TerminalView extends BaseView {
             row.setEllipsize(android.text.TextUtils.TruncateAt.END);
             row.setPadding(padH, padV, padH, padV);
             row.setText(rowText(item));
-            row.setBackgroundColor(i == mSel ? 0x3382AAFF : 0x00000000);
+            row.setBackgroundColor(i == mSel ? 0x33FFFFFF : 0x00000000);   // monochrome: translucent white
             row.setOnClickListener(v -> accept(item));
             // Long-press a command row: its full help page, offline.
             if (item.kind == Suggest.KIND_COMMAND || HelpStore.has(mActivity, item.label)) {

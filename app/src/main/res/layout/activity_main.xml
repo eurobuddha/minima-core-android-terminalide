@@ -15,17 +15,18 @@
         app:subtitleTextColor="@color/ide_accent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
+        android:background="@color/ide_bg"
         android:minHeight="?attr/actionBarSize"
         android:theme="?attr/actionBarTheme" />
 
+    <!-- Warning banner: inverted (white on black app) so it still stands out in monochrome. -->
     <TextView
         android:id="@+id/pair_banner"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="10dp"
-        android:background="#5C3A00"
-        android:textColor="#FFCB6B"
+        android:background="@color/white"
+        android:textColor="@color/black"
         android:textSize="13sp"
         android:visibility="gone"
         android:text="⚠ Not paired — open Minima Core → Apps and enable Terminal IDE, then come back. Tap here to open Minima Core." />

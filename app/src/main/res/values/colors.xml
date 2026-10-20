@@ -2,10 +2,13 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="ide_bg">#011627</color>
-    <color name="ide_bg_light">#0B2942</color>
-    <color name="ide_text">#D6DEEB</color>
-    <color name="ide_dim">#697098</color>
-    <color name="ide_accent">#82AAFF</color>
-    <color name="ide_warn">#F78C6C</color>
+    <!-- Strictly monochrome, like a classic terminal: pure white text on pure black. The one
+         panel tone (input bar / dividers) is a visually-black #141414 so the command field
+         stays findable; every text colour, including accent/warn/dim, is white. -->
+    <color name="ide_bg">#000000</color>
+    <color name="ide_bg_light">#141414</color>
+    <color name="ide_text">#FFFFFF</color>
+    <color name="ide_dim">#FFFFFF</color>
+    <color name="ide_accent">#FFFFFF</color>
+    <color name="ide_warn">#FFFFFF</color>
 </resources>
