@@ -1,7 +1,7 @@
 {
   "app/build.gradle": {
-    "mtime": 1788452910.133203,
-    "ast_hash": "2e3b4458b03a4a2a2faa4370ba6337de",
+    "mtime": 1792533229.5160315,
+    "ast_hash": "9abbd1f9e48b16733dc9e3355b523333",
     "semantic_hash": ""
   },
   "app/src/main/assets/help.json": {
@@ -15,19 +15,19 @@
     "semantic_hash": "651aad45615fa9a6dd3d29e8ca89e3cd"
   },
   "app/src/main/java/com/eurobuddha/terminalide/LogsView.java": {
-    "mtime": 1784417967.0392337,
-    "ast_hash": "d6c94518314765a81830edcfe3d1e102",
-    "semantic_hash": "d6c94518314765a81830edcfe3d1e102"
+    "mtime": 1792533056.6206222,
+    "ast_hash": "b8dc3017044351dc2f6f341c808c3938",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/MainActivity.java": {
-    "mtime": 1785580975.6941483,
-    "ast_hash": "ca620c5eab171fe5ee7b0057c359f3d2",
+    "mtime": 1792378338.3553832,
+    "ast_hash": "aef5f6ceac0a5291659657312462a92e",
     "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/NodeApi.java": {
-    "mtime": 1784408980.7671554,
-    "ast_hash": "f372fe3af4e18725eedd5f3807ffe21a",
-    "semantic_hash": "f372fe3af4e18725eedd5f3807ffe21a"
+    "mtime": 1791368332.8047326,
+    "ast_hash": "1ae24e02f9f7521cf9a07d75d91a6bd8",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/TerminalAdapter.java": {
     "mtime": 1784417911.7522352,
@@ -70,14 +70,14 @@
     "semantic_hash": "44bc4af3fcfbf064429a9b163a553856"
   },
   "app/src/main/java/com/eurobuddha/terminalide/receiver/MinimaNotifyReceiver.java": {
-    "mtime": 1784408940.4318724,
-    "ast_hash": "5416b4762292ed1aee7699ec4d83de54",
-    "semantic_hash": "5416b4762292ed1aee7699ec4d83de54"
+    "mtime": 1791368332.805201,
+    "ast_hash": "e6494e53a74270571de7e2f410e10427",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/receiver/ReceiverDB.java": {
-    "mtime": 1784408940.4315,
-    "ast_hash": "50eb79532cf22dbb9b7c8de8b75c4d9d",
-    "semantic_hash": "50eb79532cf22dbb9b7c8de8b75c4d9d"
+    "mtime": 1792527692.8537967,
+    "ast_hash": "584f54cddddd892b0e720be3b702c2f2",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/CaretEditText.java": {
     "mtime": 1784674923.1683884,
@@ -100,9 +100,9 @@
     "semantic_hash": "63c67e6eb7cb37476a81bee235d97a4c"
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/OutputFormatter.java": {
-    "mtime": 1784409755.5365555,
-    "ast_hash": "3f349d4b8ae2f0a75844e88216b337bb",
-    "semantic_hash": "3f349d4b8ae2f0a75844e88216b337bb"
+    "mtime": 1792536428.4462972,
+    "ast_hash": "9e22ec3c4fbd27a8a7cb84033f9f35e1",
+    "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/ParamDocs.java": {
     "mtime": 1788452910.1153135,
@@ -115,8 +115,8 @@
     "semantic_hash": "7bc71b8dd484a58dbe225ef65ecd85cb"
   },
   "app/src/main/java/com/eurobuddha/terminalide/terminal/TerminalView.java": {
-    "mtime": 1788452910.1222258,
-    "ast_hash": "4d2e88318b2af6dcc2a3813fef509d2f",
+    "mtime": 1792536985.8659317,
+    "ast_hash": "9b0b7bde82074d2b020a771b71aeac6d",
     "semantic_hash": ""
   },
   "app/src/main/java/com/eurobuddha/terminalide/txn/TxnView.java": {
@@ -252,6 +252,36 @@
   "tools/help/node-help.json": {
     "mtime": 1788452669.5369282,
     "ast_hash": "",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/eurobuddha/terminalide/terminal/TerminalLabel.java": {
+    "mtime": 1792527692.779309,
+    "ast_hash": "129b37f6e9515052f2fc8b1e0179dd40",
+    "semantic_hash": ""
+  },
+  "app/src/main/java/com/eurobuddha/terminalide/terminal/TerminalOutput.java": {
+    "mtime": 1792528980.2147589,
+    "ast_hash": "e11e2b014a89fe7bc0249a616afba8b9",
+    "semantic_hash": ""
+  },
+  "app/src/test/java/com/eurobuddha/terminalide/LogsViewTest.java": {
+    "mtime": 1792527836.9382775,
+    "ast_hash": "63471c742d6bd2f63d24d988c7a970d9",
+    "semantic_hash": ""
+  },
+  "app/src/test/java/com/eurobuddha/terminalide/terminal/TerminalOutputTest.java": {
+    "mtime": 1792527836.7350447,
+    "ast_hash": "534e0b8a344f224a0febff64058c72d6",
+    "semantic_hash": ""
+  },
+  "app/src/test/java/com/eurobuddha/terminalide/terminal/TerminalRenderingTest.java": {
+    "mtime": 1792527845.138833,
+    "ast_hash": "5febb348504c7697a42f4aae0255124c",
+    "semantic_hash": ""
+  },
+  "docs/PANDAMONIUM_PARITY_2026-10-19.txt": {
+    "mtime": 1792378383.2844403,
+    "ast_hash": "66571fe9c252c2fd1f7c9f99cd788c8b",
     "semantic_hash": ""
   }
 }
