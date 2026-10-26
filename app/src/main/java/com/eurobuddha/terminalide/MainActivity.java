@@ -56,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (!MinimaAPI.checkMinimaID(context, intent)) return;
-            String message = intent.getStringExtra(MinimaAPIMessages.MINIMA_API_NOTIFY_DATA);
+            String message = MinimaAPI.notifyData(intent);
             if (message == null) return;
             try {
                 JSONObject json = new JSONObject(message);
@@ -95,9 +95,7 @@ public class MainActivity extends AppCompatActivity {
 
         mPairBanner = findViewById(R.id.pair_banner);
         mPairBanner.setOnClickListener(v -> {
-            Intent launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.minimacore");
-            if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.minimablock");
-            if (launch == null) launch = getPackageManager().getLaunchIntentForPackage("com.eurobuddha.pandamonium");
+            Intent launch = MinimaAPI.launchNode(this);
             if (launch != null) startActivity(launch);
         });
 
@@ -152,7 +150,7 @@ public class MainActivity extends AppCompatActivity {
         mAdapter.getTxnView().setNodeApi(mNode);
         mAdapter.getScriptsView().setNodeApi(mNode);
 
-        IntentFilter filter = new IntentFilter(MinimaAPIMessages.MINIMA_API_NOTIFY);
+        IntentFilter filter = MinimaAPI.notifyFilter();
         androidx.core.content.ContextCompat.registerReceiver(this, mNotifyReceiver, filter,
                 androidx.core.content.ContextCompat.RECEIVER_EXPORTED);
         mReceiverRegistered = true;

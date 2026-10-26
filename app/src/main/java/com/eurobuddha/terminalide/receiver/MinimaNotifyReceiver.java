@@ -22,7 +22,7 @@ public class MinimaNotifyReceiver extends BroadcastReceiver {
 
         String action = zIntent.getAction();
 
-        if (Objects.equals(action, MinimaAPIMessages.MINIMA_API_NOTIFY)) {
+        if (MinimaAPI.isNotify(action)) {
 
             //Check MinimaID - this is set by you when you register
             if(!MinimaAPI.checkMinimaID(zContext, zIntent)){
@@ -42,7 +42,7 @@ public class MinimaNotifyReceiver extends BroadcastReceiver {
             mDB.deleteOldMessages();
 
             //Get the data
-            String message = zIntent.getStringExtra(MinimaAPIMessages.MINIMA_API_NOTIFY_DATA);
+            String message = MinimaAPI.notifyData(zIntent);
 
             //Convert to a JSON
             try {

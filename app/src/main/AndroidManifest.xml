@@ -48,6 +48,8 @@
         <receiver android:name=".receiver.MinimaNotifyReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="com.eurobuddha.minimacore.NOTIFY" />
+                <action android:name="org.minima.core.NOTIFY" />
+                <action android:name="org.minimarex.minimacore.NOTIFY" />
             </intent-filter>
         </receiver>
 
